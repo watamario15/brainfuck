@@ -1,8 +1,5 @@
 #ifdef _MSC_VER
 #define PRIu64 "I64u"
-#ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS
-#endif
 #else
 #define PRIu64 "zu"
 #endif
@@ -11,23 +8,22 @@
 
 #include <cstring>
 #include <stdexcept>
+#include <vector>
 
-void bf::reset() {
+void Brainfuck::reset() {
   progIndex = 0;
   inIndex = 0;
-  memset(memory, 0, sizeof(memory));
+  memory.clear();
+  memory.push_back(0);
   memIndex = 0;
 }
 
-void bf::reset(size_t _progLen, const char *_program, size_t _inLen,
-                      const unsigned char *_input) {
-  if (program) delete[] program;
+void Brainfuck::reset(size_t _progLen, const wchar_t *_program, size_t _inLen, const void *_input) {
   if (_progLen == 0 || !_program) {
     program = NULL;
     progLen = 0;
   } else {
-    program = new char[_progLen];
-    memcpy(program, _program, _progLen);
+    program = _program;
     progLen = _progLen;
   }
   progIndex = 0;
@@ -37,85 +33,49 @@ void bf::reset(size_t _progLen, const char *_program, size_t _inLen,
     input = NULL;
     inLen = 0;
   } else {
-    input = new unsigned char[_inLen];
-    memcpy(input, _input, _inLen);
+    input = (const unsigned char*)_input;
     inLen = _inLen;
   }
   inIndex = 0;
 
-  memset(memory, 0, sizeof(memory));
+  memory.clear();
+  memory.push_back(0);
   memIndex = 0;
-
-  signedness = false;
 }
 
-void bf::reset(size_t _progLen, const char *_program, size_t _inLen,
-                      const signed char *_input) {
-  if (program) delete[] program;
-  if (_progLen == 0 || !_program) {
-    program = NULL;
-    progLen = 0;
-  } else {
-    program = new char[_progLen];
-    memcpy(program, _program, _progLen);
-    progLen = _progLen;
-  }
-  progIndex = 0;
-
-  if (input) delete[] input;
-  if (_inLen == 0 || !_input) {
-    input = NULL;
-    inLen = 0;
-  } else {
-    input = new unsigned char[_inLen];  // reinterpret later
-    memcpy(input, _input, _inLen);
-    inLen = _inLen;
-  }
-  inIndex = 0;
-
-  memset(memory, 0, sizeof(memory));
-  memIndex = 0;
-
-  signedness = true;
-}
-
-void bf::setBehavior(enum noinput_t _noInput, bool _wrapInt, bool _wrapPtr) {
+void Brainfuck::setBehavior(enum noinput_t _noInput, bool _wrapInt, bool _signedness, bool _debug) {
   noInput = _noInput;
   wrapInt = _wrapInt;
-  wrapPtr = _wrapPtr;
+  signedness = _signedness;
+  debug = _debug;
 }
 
-bool bf::next(unsigned char *_output, bool *_didOutput) {
-  if (signedness) {
-    throw std::invalid_argument(
-        "Call this function after resetting with the unsigned version of `reset`.");
-  }
-
+enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutput) {
+  enum result_t result = RESULT_RUN;
   *_didOutput = false;
 
   if (progIndex >= progLen) {
-    return true;
+    return RESULT_FIN;
   }
 
   switch (program[progIndex]) {
-    case '>':
-      if (memIndex != sizeof(memory) - 1) {
+    case L'>':
+      if (memIndex != memory.max_size() - 1) {
         ++memIndex;
-      } else if (wrapPtr) {
-        memIndex = 0;
+        if (memory.size() == memIndex) memory.push_back(0);
       } else {
         char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '>' used when the memory pointer is 29999.",
+        sprintf(errorMsg,
+                "%" PRIu64
+                ": Instruction '>' used when the memory pointer is std::vector::max_size.",
                 progIndex);
         throw std::invalid_argument(errorMsg);
       }
       break;
 
-    case '<':
+    case L'<':
       if (memIndex != 0) {
         --memIndex;
-      } else if (wrapPtr) {
-        memIndex = sizeof(memory) - 1;
       } else {
         char errorMsg[128];
         sprintf(errorMsg, "%" PRIu64 ": Instruction '<' used when the memory pointer is 0.",
@@ -124,38 +84,62 @@ bool bf::next(unsigned char *_output, bool *_didOutput) {
       }
       break;
 
-    case '+':
-      if (memory[memIndex] < 255) {
+    // Wrap around is guaranteed for unsigned integer.
+    case L'+':
+      if (wrapInt) {
         ++memory[memIndex];
-      } else if (wrapInt) {
-        memory[memIndex] = 0;
+      } else if (signedness) {
+        if (memory[memIndex] != 0x7F) {
+          ++memory[memIndex];
+        } else {
+          char errorMsg[128];
+          sprintf(errorMsg, "%" PRIu64 ": Instruction '+' used when the pointed memory is 127.",
+                  progIndex);
+          throw std::invalid_argument(errorMsg);
+        }
       } else {
-        char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '+' used when the pointed memory is 255.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
+        if (memory[memIndex] != 0xFF) {
+          ++memory[memIndex];
+        } else {
+          char errorMsg[128];
+          sprintf(errorMsg, "%" PRIu64 ": Instruction '+' used when the pointed memory is 255.",
+                  progIndex);
+          throw std::invalid_argument(errorMsg);
+        }
       }
       break;
 
-    case '-':
-      if (memory[memIndex] > 0) {
+    // Wrap around is guaranteed for unsigned integer.
+    case L'-':
+      if (wrapInt) {
         --memory[memIndex];
-      } else if (wrapInt) {
-        memory[memIndex] = 255;
+      } else if (signedness) {
+        if (memory[memIndex] != 0x80) {
+          --memory[memIndex];
+        } else {
+          char errorMsg[128];
+          sprintf(errorMsg, "%" PRIu64 ": Instruction '-' used when the pointed memory is -128.",
+                  progIndex);
+          throw std::invalid_argument(errorMsg);
+        }
       } else {
-        char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '-' used when the pointed memory is 0.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
+        if (memory[memIndex] != 0x00) {
+          --memory[memIndex];
+        } else {
+          char errorMsg[128];
+          sprintf(errorMsg, "%" PRIu64 ": Instruction '-' used when the pointed memory is 0.",
+                  progIndex);
+          throw std::invalid_argument(errorMsg);
+        }
       }
       break;
 
-    case '.':
+    case L'.':
       *_output = memory[memIndex];
       *_didOutput = true;
       break;
 
-    case ',':
+    case L',':
       if (inIndex >= inLen) {
         if (noInput == NOINPUT_ZERO) {
           memory[memIndex] = 0;
@@ -173,19 +157,18 @@ bool bf::next(unsigned char *_output, bool *_didOutput) {
       }
       break;
 
-    case '[':
+    case L'[':
       if (memory[memIndex] == 0) {
-        size_t bracketIndex = progIndex++;
-        int ketCnt = 0;
+        size_t bracketIndex = progIndex++, ketCnt = 0;
         while (progIndex < progLen) {
-          if (program[progIndex] == ']') {
+          if (program[progIndex] == L']') {
             if (ketCnt == 0) {
               break;  // match
             } else {
               --ketCnt;  // recursive bracket
             }
           }
-          if (program[progIndex] == '[') ketCnt++;
+          if (program[progIndex] == L'[') ketCnt++;
           ++progIndex;
         }
         if (progIndex >= progLen) {
@@ -196,174 +179,36 @@ bool bf::next(unsigned char *_output, bool *_didOutput) {
       }
       break;
 
-    case ']':
+    case L']':
       if (memory[memIndex] != 0) {
-        size_t bracketIndex = progIndex--;
-        int braCnt = 0;
+        size_t bracketIndex = progIndex--, braCnt = 0;
         while (true) {
-          if (program[progIndex] == '[') {
+          if (program[progIndex] == L'[') {
             if (braCnt == 0) {
               break;  // match
             } else {
               --braCnt;  // recursive bracket
             }
           }
-          if (program[progIndex] == ']') braCnt++;
+          if (program[progIndex] == L']') braCnt++;
           if (progIndex == 0) break;
           --progIndex;
         }
-        if (progIndex <= 0 && (program[progIndex] != '[' || braCnt != 0)) {
+        if (progIndex <= 0 && (program[progIndex] != L'[' || braCnt != 0)) {
           char errorMsg[128];
           sprintf(errorMsg, "%" PRIu64 ": No matching opening bracket.", bracketIndex);
           throw std::invalid_argument(errorMsg);
         }
       }
       break;
-  }
 
-  ++progIndex;
-
-  return false;
-}
-
-bool bf::next(signed char *_output, bool *_didOutput) {
-  if (!signedness) {
-    throw std::invalid_argument(
-        "Call this function after resetting with the signed version of `reset`.");
-  }
-
-  *_didOutput = false;
-  signed char *signedMem = (signed char *)memory, *signedIn = (signed char *)input;
-
-  if (progIndex >= progLen) {
-    return true;
-  }
-
-  switch (program[progIndex]) {
-    case '>':
-      if (memIndex != sizeof(memory) - 1) {
-        ++memIndex;
-      } else if (wrapPtr) {
-        memIndex = 0;
-      } else {
-        char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '>' used when the memory pointer is 29999.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
-      }
-      break;
-
-    case '<':
-      if (memIndex != 0) {
-        --memIndex;
-      } else if (wrapPtr) {
-        memIndex = sizeof(memory) - 1;
-      } else {
-        char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '<' used when the memory pointer is 0.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
-      }
-      break;
-
-    case '+':
-      if (signedMem[memIndex] < 127) {
-        ++signedMem[memIndex];
-      } else if (wrapInt) {
-        signedMem[memIndex] = -128;
-      } else {
-        char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '+' used when the pointed memory is 127.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
-      }
-      break;
-
-    case '-':
-      if (signedMem[memIndex] > -128) {
-        --signedMem[memIndex];
-      } else if (wrapInt) {
-        signedMem[memIndex] = 127;
-      } else {
-        char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '-' used when the pointed memory is -128.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
-      }
-      break;
-
-    case '.':
-      *_output = signedMem[memIndex];
-      *_didOutput = true;
-      break;
-
-    case ',':
-      if (inIndex >= inLen) {
-        if (noInput == NOINPUT_ZERO) {
-          signedMem[memIndex] = 0;
-        } else if (noInput == NOINPUT_FF) {
-          signedMem[memIndex] = -1;
-        } else {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": Instruction ',' used when the input stream is empty.",
-                  progIndex);
-          throw std::invalid_argument(errorMsg);
-        }
-      } else {
-        signedMem[memIndex] = signedIn[inIndex];
-        ++inIndex;
-      }
-      break;
-
-    case '[':
-      if (signedMem[memIndex] == 0) {
-        size_t bracketIndex = progIndex++;
-        int ketCnt = 0;
-        while (progIndex < progLen) {
-          if (program[progIndex] == ']') {
-            if (ketCnt == 0) {
-              break;  // match
-            } else {
-              --ketCnt;  // recursive bracket
-            }
-          }
-          if (program[progIndex] == '[') ketCnt++;
-          ++progIndex;
-        }
-        if (progIndex >= progLen) {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": No matching closing bracket.", bracketIndex);
-          throw std::invalid_argument(errorMsg);
-        }
-      }
-      break;
-
-    case ']':
-      if (signedMem[memIndex] != 0) {
-        size_t bracketIndex = progIndex--;
-        int braCnt = 0;
-        while (true) {
-          if (program[progIndex] == '[') {
-            if (braCnt == 0) {
-              break;  // match
-            } else {
-              --braCnt;  // recursive bracket
-            }
-          }
-          if (program[progIndex] == ']') braCnt++;
-          if (progIndex == 0) break;
-          --progIndex;
-        }
-        if (progIndex <= 0 && (program[progIndex] != '[' || braCnt != 0)) {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": No matching opening bracket.", bracketIndex);
-          throw std::invalid_argument(errorMsg);
-        }
-      }
+    // Extended spec for debugging (breakpoint)
+    case L'@':
+      if (debug) result = RESULT_BREAK;
       break;
   }
 
   ++progIndex;
 
-  return false;
+  return result;
 }

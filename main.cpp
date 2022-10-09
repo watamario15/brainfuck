@@ -1,6 +1,3 @@
-#if (defined _MSC_VER) && !(defined _CRT_SECURE_NO_WARNINGS)
-#define _CRT_SECURE_NO_WARNINGS
-#endif
 #ifndef _UNICODE
 #define _UNICODE
 #endif
@@ -45,9 +42,10 @@
 
 enum ctrlthread_t { CTRLTHREAD_RUN, CTRLTHREAD_PAUSE, CTRLTHREAD_END };
 
-static class bf *g_bf;
+static class Brainfuck *g_bf;
 static unsigned int g_timerID = 0;
 static wchar_t *g_cmdLine;
+static bool g_prevCR = false;
 static std::vector<unsigned char> g_outBuf;
 static HANDLE g_hThread = NULL;
 static volatile enum ctrlthread_t g_ctrlThread = CTRLTHREAD_RUN;
@@ -63,16 +61,19 @@ static inline bool isSpace(wchar_t chr) {
 
 // Initializes the Brainfuck module.
 static bool bfInit() {
+  static std::vector<unsigned char> vecIn;
+  static unsigned char *input = NULL;
+
   ui::clearOutput();
+  ui::setMemory(NULL);
   g_outBuf.clear();
+  g_prevCR = false;
+  int inLen;
+  wchar_t *wcInput = ui::getInput();
+  if (input && vecIn.empty()) delete[] input;
+  input = NULL;
+  vecIn.clear();
 
-  unsigned char *input;
-  wchar_t *wcEditor = ui::getEditor(), *wcInput = ui::getInput();
-  int editLen = WideCharToMultiByte(CP_UTF8, 0, wcEditor, -1, (char *)NULL, 0, NULL, NULL), inLen;
-  char *szEditor = new char[editLen];
-  WideCharToMultiByte(CP_UTF8, 0, wcEditor, -1, szEditor, editLen, NULL, NULL);
-
-  std::vector<unsigned char> vecIn;
   if (ui::inCharSet == IDM_OPT_INPUT_HEX) {
     wchar_t hex[2];
     int hexLen = 0;
@@ -117,20 +118,12 @@ static bool bfInit() {
   } else {
     int codePage = (ui::inCharSet == IDM_OPT_INPUT_SJIS) ? 932 : CP_UTF8;
     inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)NULL, 0, NULL, NULL);
-    unsigned char *szInput = new unsigned char[inLen];
-    WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)szInput, inLen, NULL, NULL);
-    input = szInput;
+    input = new unsigned char[inLen];
+    WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)input, inLen, NULL, NULL);
     inLen--;
   }
 
-  if (ui::signedness) {
-    g_bf->reset(editLen - 1, szEditor, inLen, (signed char *)input);
-  } else {
-    g_bf->reset(editLen - 1, szEditor, inLen, input);
-  }
-
-  delete[] szEditor;
-  if (ui::inCharSet != IDM_OPT_INPUT_HEX) delete[] input;
+  g_bf->reset(wcslen(ui::getEditor()), ui::getEditor(), inLen, input);
 
   return true;
 }
@@ -138,12 +131,12 @@ static bool bfInit() {
 // Executes the next instruction.
 static bool bfNext(HWND hWnd, enum ui::state_t state) {
   unsigned char output;
-  bool didOutput, fin;
-  g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::wrapPtr);
+  bool didOutput;
+  enum Brainfuck::result_t result;
+  g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::debug);
 
   try {
-    fin = ui::signedness ? g_bf->next((signed char *)&output, &didOutput)
-                         : g_bf->next(&output, &didOutput);
+    result = g_bf->next(&output, &didOutput);
   } catch (std::invalid_argument const &ex) {
     if (g_timerID) {
       timeKillEvent(g_timerID);
@@ -155,10 +148,10 @@ static bool bfNext(HWND hWnd, enum ui::state_t state) {
     MultiByteToWideChar(CP_UTF8, 0, ex.what(), -1, wcException, exLen);
     MessageBoxW(hWnd, wcException, L"Error", MB_ICONWARNING);
     delete[] wcException;
-    fin = true;
+    result = Brainfuck::RESULT_FIN;
   }
 
-  if (fin) {
+  if (result == Brainfuck::RESULT_FIN) {
     if (!g_outBuf.empty()) {
       int codePage = (ui::outCharSet == IDM_OPT_OUTPUT_SJIS) ? 932 : CP_UTF8;
       if (g_outBuf.back() != 0) g_outBuf.push_back(0);  // null terminator
@@ -169,13 +162,15 @@ static bool bfNext(HWND hWnd, enum ui::state_t state) {
       ui::setOutput(wcOut);
       delete[] wcOut;
     }
-    ui::setState(ui::STATE_FINISH);
   } else {
     if (didOutput) {
       if (ui::outCharSet == IDM_OPT_OUTPUT_ASCII) {
         wchar_t wcOut[] = {0, 0};
         MultiByteToWideChar(CP_UTF8, 0, (char *)&output, 1, wcOut, 1);
+        if (g_prevCR && wcOut[0] != L'\n') ui::appendOutput(L"\n");
+        if (!g_prevCR && wcOut[0] == L'\n') ui::appendOutput(L"\r");
         ui::appendOutput(wcOut);
+        g_prevCR = wcOut[0] == L'\r';
       } else if (ui::outCharSet == IDM_OPT_OUTPUT_HEX) {
         wchar_t wcOut[] = {0, 0, L' ', 0};
         unsigned char high = output >> 4, low = output & 0xF;
@@ -191,19 +186,31 @@ static bool bfNext(HWND hWnd, enum ui::state_t state) {
         }
         ui::appendOutput(wcOut);
       } else {
+        if (g_prevCR && output != '\n') g_outBuf.push_back('\n');
+        if (!g_prevCR && output == '\n') g_outBuf.push_back('\r');
         g_outBuf.push_back(output);
       }
     }
+  }
+
+  if (result == Brainfuck::RESULT_FIN) {
+    ui::setState(ui::STATE_FINISH);
+  } else if (result == Brainfuck::RESULT_BREAK) {
+    ui::setState(ui::STATE_PAUSE);
+  } else {
     ui::setState(state);
   }
 
-  return fin;
+  return result;
 }
 
+// Executes an Brainfuck program until it completes.
 DWORD WINAPI threadRunner(LPVOID lpParameter) {
   UNREFERENCED_PARAMETER(lpParameter);
 
-  while (g_ctrlThread == CTRLTHREAD_RUN && !bfNext(ui::hWnd, ui::STATE_RUN))
+  ui::setMemory(NULL);
+
+  while (g_ctrlThread == CTRLTHREAD_RUN && bfNext(ui::hWnd, ui::STATE_RUN) == Brainfuck::RESULT_RUN)
     ;
 
   PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
@@ -219,14 +226,14 @@ static void CALLBACK timerRunner(UINT uTimerID, UINT uMsg, DWORD_PTR dwUser, DWO
   UNREFERENCED_PARAMETER(dw1);
   UNREFERENCED_PARAMETER(dw2);
 
-  // appendOutput(L"<TMR>"); // debug
-
-  if (g_timerID && bfNext(ui::hWnd, ui::STATE_RUN)) {
-    // appendOutput(L"<End>"); // debug
+  if (g_timerID && bfNext(ui::hWnd, ui::STATE_RUN) != Brainfuck::RESULT_RUN) {
     timeKillEvent(g_timerID);
     timeEndPeriod(ui::speed);
     g_timerID = 0;
   }
+
+  ui::setMemory(&g_bf->getMemory());
+  ui::setSelect(g_bf->getProgPtr());
 }
 
 static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -234,7 +241,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
   switch (uMsg) {
     case WM_CREATE:
-      g_bf = new bf();
+      g_bf = new Brainfuck();
       ui::onCreate(hWnd, ((LPCREATESTRUCT)(lParam))->hInstance);
       if (g_cmdLine[0]) {
         ui::openFile(false, g_cmdLine);
@@ -247,10 +254,6 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       ui::onSize();
       break;
 
-    case WM_PAINT:
-      ui::onPaint();
-      break;
-
     case WM_INITMENUPOPUP:
       ui::onInitMenuPopup();
       break;
@@ -259,16 +262,27 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) ui::onActivate();
       break;
 
+#ifndef UNDER_CE
+    case WM_DROPFILES:
+      ui::onDropFiles((HDROP)wParam);
+      break;
+#endif
+
     case WM_APP_THREADEND:
       WaitForSingleObject(g_hThread, INFINITE);
       CloseHandle(g_hThread);
       g_hThread = NULL;
       if (g_ctrlThread == CTRLTHREAD_PAUSE) {
+        ui::setMemory(&g_bf->getMemory());
+        ui::setSelect(g_bf->getProgPtr());
         ui::setState(ui::STATE_PAUSE);
       } else if (g_ctrlThread == CTRLTHREAD_END) {
         g_bf->reset();
         ui::setState(ui::STATE_INIT);
         didInit = false;
+      } else {
+        ui::setMemory(&g_bf->getMemory());
+        ui::setSelect(g_bf->getProgPtr());
       }
       g_ctrlThread = CTRLTHREAD_RUN;
       break;
@@ -324,6 +338,8 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             didInit = true;
           }
           bfNext(hWnd, ui::STATE_PAUSE);
+          ui::setMemory(&g_bf->getMemory());
+          ui::setSelect(g_bf->getProgPtr());
           break;
 
         case IDC_CMDBTN_FIRST + 2:  // Pause
@@ -373,22 +389,6 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           SendMessageW(hWnd, WM_CLOSE, 0, 0);
           break;
 
-        case IDM_OPT_SPEED_FASTEST:
-          ui::speed = 0;
-          break;
-
-        case IDM_OPT_SPEED_1MS:
-          ui::speed = 1;
-          break;
-
-        case IDM_OPT_SPEED_10MS:
-          ui::speed = 10;
-          break;
-
-        case IDM_OPT_SPEED_100MS:
-          ui::speed = 100;
-          break;
-
         case IDM_OPT_MEMTYPE_SIGNED:
           ui::signedness = true;
           break;
@@ -426,15 +426,15 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDM_OPT_NOINPUT_ERROR:
-          ui::noInput = bf::NOINPUT_ERROR;
+          ui::noInput = Brainfuck::NOINPUT_ERROR;
           break;
 
         case IDM_OPT_NOINPUT_ZERO:
-          ui::noInput = bf::NOINPUT_ZERO;
+          ui::noInput = Brainfuck::NOINPUT_ZERO;
           break;
 
         case IDM_OPT_NOINPUT_FF:
-          ui::noInput = bf::NOINPUT_FF;
+          ui::noInput = Brainfuck::NOINPUT_FF;
           break;
 
         case IDM_OPT_INTOVF_ERROR:
@@ -445,12 +445,37 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           ui::wrapInt = true;
           break;
 
-        case IDM_OPT_PTROVF_ERROR:
-          ui::wrapPtr = false;
+        case IDM_OPT_DEBUG:
+          ui::debug = !ui::debug;
+          g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::debug);
           break;
 
-        case IDM_OPT_PTROVF_WRAPAROUND:
-          ui::wrapPtr = true;
+        case IDM_OPT_SPEED_FASTEST:
+          ui::speed = 0;
+          break;
+
+        case IDM_OPT_SPEED_1MS:
+          ui::speed = 1;
+          break;
+
+        case IDM_OPT_SPEED_10MS:
+          ui::speed = 10;
+          break;
+
+        case IDM_OPT_SPEED_100MS:
+          ui::speed = 100;
+          break;
+
+        case IDM_OPT_MEMVIEW:
+          DialogBoxIndirectParamW(
+              ui::hInst,
+              (LPCDLGTEMPLATE)LoadResource(ui::hInst,
+                                           FindResourceW(ui::hInst, L"MemViewOpt", RT_DIALOG)),
+              hWnd, ui::memViewProc, 0);
+          break;
+
+        case IDM_OPT_HIGHLIGHT_MEMORY:
+          ui::setSelectMemView(g_bf->getMemPtr());
           break;
 
         case IDM_OPT_WORDWRAP:
@@ -462,12 +487,12 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         default:
-          if (LOWORD(wParam) >= IDC_SCRKBD_FIRST && LOWORD(wParam) < IDC_SCRKBD_FIRST + 8) {
+          if (LOWORD(wParam) >= IDC_SCRKBD_FIRST && LOWORD(wParam) <= IDC_SCRKBD_FIRST + 8) {
             ui::onScreenKeyboard(LOWORD(wParam) - IDC_SCRKBD_FIRST);
           }
       }
       if (LOWORD(wParam) != IDC_EDITOR && LOWORD(wParam) != IDC_INPUT &&
-          LOWORD(wParam) != IDC_OUTPUT) {
+          LOWORD(wParam) != IDC_OUTPUT && LOWORD(wParam) != IDC_MEMVIEW) {
         ui::setFocus();
       }
       break;
@@ -502,7 +527,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
   wcl.lpszMenuName = NULL;
   wcl.cbClsExtra = 0;
   wcl.cbWndExtra = 0;
-  wcl.hbrBackground = NULL;
+  wcl.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
   if (!RegisterClassW(&wcl)) return FALSE;
 
   HWND hWnd = CreateWindowExW(0, WND_CLASS_NAME, APP_NAME, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
@@ -512,6 +537,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
   ShowWindow(hWnd, nShowCmd);
 #ifdef UNDER_CE
   ShowWindow(hWnd, SW_MAXIMIZE);
+#else
+  DragAcceptFiles(hWnd, TRUE);
 #endif
   UpdateWindow(hWnd);
 

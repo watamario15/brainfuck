@@ -12,6 +12,6 @@ echo "*** Compiling res.rc..."
 windres res.rc res.o
 
 echo "*** Linking..."
-g++ *.o -static -s -lmmtimer -mwindows -municode -o Brainfuck.exe
+g++ *.o -static -s -lcommctrl -lcommdlg -lmmtimer -o AppMain_.exe
 
 echo "OK"

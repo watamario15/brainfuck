@@ -56,13 +56,6 @@ Menu MENU
     }
     POPUP "&Options"
     {
-        POPUP "&Speed"
-        {
-            MENUITEM "&Fastest", IDM_OPT_SPEED_FASTEST
-            MENUITEM "1 ms (&o)", IDM_OPT_SPEED_1MS
-            MENUITEM "10 ms (&t)", IDM_OPT_SPEED_10MS
-            MENUITEM "100 ms (&h)", IDM_OPT_SPEED_100MS
-        }
         POPUP "&Memory type"
         {
             MENUITEM "&Signed (-128 to 127)", IDM_OPT_MEMTYPE_SIGNED
@@ -92,12 +85,32 @@ Menu MENU
             MENUITEM "&Error", IDM_OPT_INTOVF_ERROR
             MENUITEM "&Wrap around", IDM_OPT_INTOVF_WRAPAROUND
         }
-        POPUP "&Pointer overflow"
+        MENUITEM "&Breakpoint instruction (@)", IDM_OPT_DEBUG
+        POPUP "&Speed"
         {
-            MENUITEM "&Error", IDM_OPT_PTROVF_ERROR
-            MENUITEM "&Wrap around", IDM_OPT_PTROVF_WRAPAROUND
+            MENUITEM "&Fastest", IDM_OPT_SPEED_FASTEST
+            MENUITEM "1 ms (&o)", IDM_OPT_SPEED_1MS
+            MENUITEM "10 ms (&t)", IDM_OPT_SPEED_10MS
+            MENUITEM "100 ms (&h)", IDM_OPT_SPEED_100MS
         }
+        MENUITEM "Memory &view...", IDM_OPT_MEMVIEW
+        MENUITEM "&Highlight memory pointer", IDM_OPT_HIGHLIGHT_MEMORY
         MENUITEM "&Word wrap", IDM_OPT_WORDWRAP
     }
     MENUITEM "&About", IDM_ABOUT
+}
+
+//
+// Dialog (memory view range)
+//
+
+MemViewOpt DIALOG 0, 0, 200, 100
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Memory view options"
+FONT 9, "MS Shell Dlg"
+{
+   LTEXT "Set a start address of the memory view (0-indexed byte):", 0, 8, 8, 180, 24
+   EDITTEXT  IDG_FROM, 8, 45, 64, 14, ES_NUMBER
+   DEFPUSHBUTTON "&OK", IDG_OK, 80, 80, 50, 12
+   PUSHBUTTON "&Cancel", IDG_CANCEL, 140, 80, 50, 12
 }

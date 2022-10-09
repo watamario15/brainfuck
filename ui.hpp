@@ -8,10 +8,12 @@
 namespace ui {
 enum state_t { STATE_INIT, STATE_RUN, STATE_PAUSE, STATE_FINISH };
 
-extern bool signedness, wrapInt, wrapPtr;
+extern enum state_t state;
+extern bool signedness, wrapInt, debug;
 extern int speed, outCharSet, inCharSet;
-extern enum bf::noinput_t noInput;
+extern enum Brainfuck::noinput_t noInput;
 extern HWND hWnd;
+extern HINSTANCE hInst;
 
 // WM_CREATE handler.
 void onCreate(HWND _hWnd, HINSTANCE _hInst);
@@ -22,23 +24,34 @@ void onDestroy();
 // WM_SIZE handler.
 void onSize();
 
-// WM_PAINT handler.
-void onPaint();
-
 // WM_ACTIVATE handler.
 void onActivate();
+
+#ifndef UNDER_CE
+// WM_DROPFILES handler.
+void onDropFiles(HDROP hDrop);
+#endif
 
 // Screen keyboard handler.
 void onScreenKeyboard(int _key);
 
 // Sets a UI state.
-void setState(enum state_t _state);
+void setState(enum state_t _state, bool _force = false);
 
 // Focus on the editor.
 void setFocus();
 
+// Sets selection on the editor.
+void setSelect(unsigned int _progPtr);
+
+// Set focus on memory view
+void setSelectMemView(unsigned int _memPtr);
+
 // Update the menu.
 void onInitMenuPopup();
+
+// Memory view settings dialog.
+INT_PTR CALLBACK memViewProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // Retrieves the editor content to the returned buffer.
 // Previously returned pointer gets invalidated on each call.
@@ -56,6 +69,9 @@ void setOutput(const wchar_t *_str);
 
 // Outputs an null-terminated string to the output box.
 void appendOutput(const wchar_t *_str);
+
+// Sets memory. Clears the memory view when NULL is given.
+void setMemory(const std::vector<unsigned char> *memory);
 
 // Switch between wordwrap enabled and disabled for edit controls.
 void switchWordwrap();

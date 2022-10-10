@@ -29,8 +29,16 @@
 #define WS_MAXIMIZEBOX 0x00020000L
 #endif
 #define wWinMain WinMain
+#define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
+  CreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
+#define TTYPE DWORD
 #include <commctrl.h>
 #include <commdlg.h>
+#else
+#include <process.h>
+#define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
+  (HANDLE)_beginthreadex(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
+#define TTYPE unsigned int
 #endif
 
 #include <stdexcept>
@@ -40,7 +48,8 @@
 #include "def.h"
 #include "ui.hpp"
 
-enum ctrlthread_t { CTRLTHREAD_RUN, CTRLTHREAD_PAUSE, CTRLTHREAD_END };
+// Expecting `int` to be atomic
+enum ctrlthread_t : int { CTRLTHREAD_RUN, CTRLTHREAD_PAUSE, CTRLTHREAD_END };
 
 static class Brainfuck *g_bf;
 static unsigned int g_timerID = 0;
@@ -53,10 +62,6 @@ static volatile enum ctrlthread_t g_ctrlThread = CTRLTHREAD_RUN;
 static inline bool isHex(wchar_t chr) {
   return (chr >= L'0' && chr <= L'9') || (chr >= L'A' && chr <= L'F') ||
          (chr >= L'a' && chr <= L'f');
-}
-
-static inline bool isSpace(wchar_t chr) {
-  return chr == L' ' || chr == L'\r' || chr == L'\n' || chr == L'\t' || chr == L'\0';
 }
 
 // Initializes the Brainfuck module.
@@ -86,7 +91,7 @@ static bool bfInit() {
         } else {
           hex[hexLen++] = wcInput[i];
         }
-      } else if (isSpace(wcInput[i])) {
+      } else if (iswspace(wcInput[i])) {
         if (hexLen == 1) {
           if (hex[0] < L'A') {
             vecIn.push_back(hex[0] - L'0');
@@ -129,7 +134,7 @@ static bool bfInit() {
 }
 
 // Executes the next instruction.
-static bool bfNext(HWND hWnd, enum ui::state_t state) {
+static enum Brainfuck::result_t bfNext(HWND hWnd, enum ui::state_t state) {
   unsigned char output;
   bool didOutput;
   enum Brainfuck::result_t result;
@@ -205,35 +210,51 @@ static bool bfNext(HWND hWnd, enum ui::state_t state) {
 }
 
 // Executes an Brainfuck program until it completes.
-DWORD WINAPI threadRunner(LPVOID lpParameter) {
+TTYPE WINAPI threadRunner(LPVOID lpParameter) {
   UNREFERENCED_PARAMETER(lpParameter);
 
-  ui::setMemory(NULL);
+  HANDLE hEvent = 0;
+  if (ui::speed != 0) {
+    hEvent = CreateEventW(NULL, FALSE, TRUE, NULL);
+    if (timeBeginPeriod(ui::speed) == TIMERR_NOERROR) {
+      g_timerID = timeSetEvent(ui::speed, ui::speed, (LPTIMECALLBACK)hEvent, 0,
+                               TIME_PERIODIC | TIME_CALLBACK_EVENT_SET);
+    }
+    if (g_timerID == 0) {
+      MessageBoxW(ui::hWnd, L"This speed is not supported on your device. Try slowing down.",
+                  L"Error", MB_ICONERROR);
+      ui::setState(ui::STATE_INIT);
+      PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
+      return 1;
+    }
+  }
 
-  while (g_ctrlThread == CTRLTHREAD_RUN && bfNext(ui::hWnd, ui::STATE_RUN) == Brainfuck::RESULT_RUN)
-    ;
+  while (g_ctrlThread == CTRLTHREAD_RUN) {
+    if (ui::speed != 0) WaitForSingleObject(hEvent, INFINITE);
+    if (bfNext(ui::hWnd, ui::STATE_RUN) != Brainfuck::RESULT_RUN) break;
+  }
 
-  PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
-  return 0;
-}
-
-// Executes the next code on each timer call.
-static void CALLBACK timerRunner(UINT uTimerID, UINT uMsg, DWORD_PTR dwUser, DWORD_PTR dw1,
-                                 DWORD_PTR dw2) {
-  UNREFERENCED_PARAMETER(uTimerID);
-  UNREFERENCED_PARAMETER(uMsg);
-  UNREFERENCED_PARAMETER(dwUser);
-  UNREFERENCED_PARAMETER(dw1);
-  UNREFERENCED_PARAMETER(dw2);
-
-  if (g_timerID && bfNext(ui::hWnd, ui::STATE_RUN) != Brainfuck::RESULT_RUN) {
+  if (ui::speed != 0) {
     timeKillEvent(g_timerID);
     timeEndPeriod(ui::speed);
+    CloseHandle(hEvent);
     g_timerID = 0;
   }
 
-  ui::setMemory(&g_bf->getMemory());
-  ui::setSelect(g_bf->getProgPtr());
+  if (g_ctrlThread == CTRLTHREAD_PAUSE) {
+    ui::setState(ui::STATE_PAUSE);
+    ui::setMemory(&g_bf->getMemory());
+    ui::setSelect(g_bf->getProgPtr());
+  } else if (g_ctrlThread == CTRLTHREAD_END) {
+    ui::setState(ui::STATE_INIT);
+    g_bf->reset();
+  } else {  // bfNext should already have set the appropriate state
+    ui::setMemory(&g_bf->getMemory());
+    ui::setSelect(g_bf->getProgPtr());
+  }
+
+  PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
+  return 0;
 }
 
 static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -272,18 +293,6 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       WaitForSingleObject(g_hThread, INFINITE);
       CloseHandle(g_hThread);
       g_hThread = NULL;
-      if (g_ctrlThread == CTRLTHREAD_PAUSE) {
-        ui::setMemory(&g_bf->getMemory());
-        ui::setSelect(g_bf->getProgPtr());
-        ui::setState(ui::STATE_PAUSE);
-      } else if (g_ctrlThread == CTRLTHREAD_END) {
-        g_bf->reset();
-        ui::setState(ui::STATE_INIT);
-        didInit = false;
-      } else {
-        ui::setMemory(&g_bf->getMemory());
-        ui::setSelect(g_bf->getProgPtr());
-      }
       g_ctrlThread = CTRLTHREAD_RUN;
       break;
 
@@ -308,25 +317,16 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             didInit = true;
           }
 
-          if (ui::speed == 0) {
-            g_hThread = CreateThread(NULL, 0, threadRunner, NULL, 0, NULL);
-            if (g_hThread) {
-              SetThreadPriority(g_hThread, THREAD_PRIORITY_BELOW_NORMAL);
-            } else {
-              MessageBoxW(hWnd, L"Failed to create a runner thread.", L"Error", MB_ICONERROR);
-            }
+          g_hThread = myCreateThread(NULL, 0, threadRunner, NULL, 0, NULL);
+          if (g_hThread) {
+            SetThreadPriority(g_hThread, THREAD_PRIORITY_BELOW_NORMAL);
           } else {
-            if (timeBeginPeriod(ui::speed) == TIMERR_NOERROR) {
-              g_timerID = timeSetEvent(ui::speed, ui::speed, timerRunner, 0, TIME_PERIODIC);
-              if (g_timerID == 0) {
-                MessageBoxW(hWnd, L"This speed is not supported on your device. Try slowing down.",
-                            L"Error", MB_ICONERROR);
-              }
-            } else {
-              MessageBoxW(hWnd, L"This speed is not supported on your device. Try slowing down.",
-                          L"Error", MB_ICONERROR);
-            }
+            MessageBoxW(hWnd, L"Failed to create a runner thread.", L"Error", MB_ICONERROR);
+            break;
           }
+
+          ui::setMemory(NULL);
+          ui::setState(ui::STATE_RUN);
           break;
 
         case IDC_CMDBTN_FIRST + 1:  // Next
@@ -337,17 +337,13 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             }
             didInit = true;
           }
+
           bfNext(hWnd, ui::STATE_PAUSE);
           ui::setMemory(&g_bf->getMemory());
           ui::setSelect(g_bf->getProgPtr());
           break;
 
         case IDC_CMDBTN_FIRST + 2:  // Pause
-          if (g_timerID) {
-            timeKillEvent(g_timerID);
-            timeEndPeriod(ui::speed);
-            g_timerID = 0;
-          }
           if (g_hThread) {
             g_ctrlThread = CTRLTHREAD_PAUSE;
           }
@@ -355,18 +351,13 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDC_CMDBTN_FIRST + 3:  // End
-          if (g_timerID) {
-            timeKillEvent(g_timerID);
-            timeEndPeriod(ui::speed);
-            g_timerID = 0;
-          }
           if (g_hThread) {
             g_ctrlThread = CTRLTHREAD_END;
           } else {
             g_bf->reset();
-            ui::setState(ui::STATE_INIT);
-            didInit = false;
           }
+          ui::setState(ui::STATE_INIT);
+          didInit = false;
           break;
 
         case IDM_FILE_NEW:
@@ -467,11 +458,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDM_OPT_MEMVIEW:
-          DialogBoxIndirectParamW(
-              ui::hInst,
-              (LPCDLGTEMPLATE)LoadResource(ui::hInst,
-                                           FindResourceW(ui::hInst, L"MemViewOpt", RT_DIALOG)),
-              hWnd, ui::memViewProc, 0);
+          DialogBoxW(ui::hInst, L"MemViewOpt", hWnd, ui::memViewProc);
           break;
 
         case IDM_OPT_HIGHLIGHT_MEMORY:

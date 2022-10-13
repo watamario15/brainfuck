@@ -9,7 +9,7 @@ namespace ui {
 enum state_t { STATE_INIT, STATE_RUN, STATE_PAUSE, STATE_FINISH };
 
 extern enum state_t state;
-extern bool signedness, wrapInt, debug;
+extern bool signedness, wrapInt, breakpoint, debug;
 extern int speed, outCharSet, inCharSet;
 extern enum Brainfuck::noinput_t noInput;
 extern HWND hWnd;

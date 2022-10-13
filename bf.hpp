@@ -1,5 +1,5 @@
-// This module assume `signed char` is a two's complement 8-bit integer (int8_t).
-// I avoid the use of int8_t as eVC4 doesn't have stdint.h.
+// This module assumes `unsigned char` to be an 8-bit integer (uint8_t).
+// I avoid the use of uint8_t as eVC4 doesn't have stdint.h.
 
 #ifndef BF_HPP_
 #define BF_HPP_

@@ -42,7 +42,7 @@ static HWND hEditor, hInput, hOutput, hMemView, hCmdBtn[sizeof(wcCmdBtn) / sizeo
     hScrKB[sizeof(wcScrKB) / sizeof(wcScrKB[0])];
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
-static int topPadding = 0, scrX = 480, scrY = 320, memCache[100];
+static int topPadding = 0, scrX = 480, scrY = 320;
 static unsigned int memViewStart = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
 static std::wstring wstrFileName;
@@ -52,15 +52,14 @@ static HWND hCmdBar;
 #endif
 
 enum state_t state = STATE_INIT;
-bool signedness = true, wrapInt = true, debug = false;
-int speed = 10, outCharSet = IDM_OPT_OUTPUT_ASCII, inCharSet = IDM_OPT_INPUT_UTF8;
+bool signedness = true, wrapInt = true, breakpoint = false, debug = false;
+int speed = 10, outCharSet = IDM_BF_OUTPUT_ASCII, inCharSet = IDM_BF_INPUT_UTF8;
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
 HWND hWnd;
 HINSTANCE hInst;
 
-// Switches between enabled/disabled of a submenu.
-// Expects the menu is starting from the smaller nearest 10 multiple.
-static void enableAllSubMenu(unsigned int _endID, bool _enable) {
+// Enables/Disables menu items from the smaller nearest 10 multiple to `_endID`.
+static void enableMenus(unsigned int _endID, bool _enable) {
   unsigned int i;
   for (i = (_endID / 10) * 10; i <= _endID; ++i) {
     EnableMenuItem(hMenu, i, MF_BYCOMMAND | (_enable ? MF_ENABLED : MF_GRAYED));
@@ -127,8 +126,6 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
     hScrKB[i] = CreateWindowExW(0, L"BUTTON", wcScrKB[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0,
                                 0, 0, 0, hWnd, (HMENU)(IDC_SCRKBD_FIRST + i), hInst, NULL);
   }
-
-  memset(memCache, -1, sizeof(memCache));
 }
 
 void onDestroy() {
@@ -218,26 +215,26 @@ void onSize() {
 void onActivate() { SetFocus(hEditor); }
 
 void onInitMenuPopup() {
-  // Options -> Memory type
-  CheckMenuRadioItem(hMenu, IDM_OPT_MEMTYPE_SIGNED, IDM_OPT_MEMTYPE_UNSIGNED,
-                     signedness ? IDM_OPT_MEMTYPE_SIGNED : IDM_OPT_MEMTYPE_UNSIGNED, MF_BYCOMMAND);
+  // Brainfuck -> Memory type
+  CheckMenuRadioItem(hMenu, IDM_BF_MEMTYPE_SIGNED, IDM_BF_MEMTYPE_UNSIGNED,
+                     signedness ? IDM_BF_MEMTYPE_SIGNED : IDM_BF_MEMTYPE_UNSIGNED, MF_BYCOMMAND);
 
-  // Options -> Output charset
-  CheckMenuRadioItem(hMenu, IDM_OPT_OUTPUT_ASCII, IDM_OPT_OUTPUT_HEX, outCharSet, MF_BYCOMMAND);
+  // Brainfuck -> Output charset
+  CheckMenuRadioItem(hMenu, IDM_BF_OUTPUT_ASCII, IDM_BF_OUTPUT_HEX, outCharSet, MF_BYCOMMAND);
 
-  // Options -> Input charset
-  CheckMenuRadioItem(hMenu, IDM_OPT_INPUT_UTF8, IDM_OPT_INPUT_HEX, inCharSet, MF_BYCOMMAND);
+  // Brainfuck -> Input charset
+  CheckMenuRadioItem(hMenu, IDM_BF_INPUT_UTF8, IDM_BF_INPUT_HEX, inCharSet, MF_BYCOMMAND);
 
-  // Options -> Input instruction
-  CheckMenuRadioItem(hMenu, IDM_OPT_NOINPUT_ERROR, IDM_OPT_NOINPUT_FF,
-                     IDM_OPT_NOINPUT_ERROR + noInput, MF_BYCOMMAND);
+  // Brainfuck -> Input instruction
+  CheckMenuRadioItem(hMenu, IDM_BF_NOINPUT_ERROR, IDM_BF_NOINPUT_FF, IDM_BF_NOINPUT_ERROR + noInput,
+                     MF_BYCOMMAND);
 
-  // Options -> Integer overflow
-  CheckMenuRadioItem(hMenu, IDM_OPT_INTOVF_ERROR, IDM_OPT_INTOVF_WRAPAROUND,
-                     wrapInt ? IDM_OPT_INTOVF_WRAPAROUND : IDM_OPT_INTOVF_ERROR, MF_BYCOMMAND);
+  // Brainfuck -> Integer overflow
+  CheckMenuRadioItem(hMenu, IDM_BF_INTOVF_ERROR, IDM_BF_INTOVF_WRAPAROUND,
+                     wrapInt ? IDM_BF_INTOVF_WRAPAROUND : IDM_BF_INTOVF_ERROR, MF_BYCOMMAND);
 
-  // Options -> Debug
-  CheckMenuItem(hMenu, IDM_OPT_DEBUG, MF_BYCOMMAND | debug ? MF_CHECKED : MF_UNCHECKED);
+  // Brainfuck -> Breakpoint
+  CheckMenuItem(hMenu, IDM_BF_BREAKPOINT, MF_BYCOMMAND | breakpoint ? MF_CHECKED : MF_UNCHECKED);
 
   // Options -> Speed
   if (speed == 0) {
@@ -254,48 +251,57 @@ void onInitMenuPopup() {
                        MF_BYCOMMAND);
   }
 
+  // Options -> Debug
+  CheckMenuItem(hMenu, IDM_OPT_TRACK, MF_BYCOMMAND | debug ? MF_CHECKED : MF_UNCHECKED);
+
   // Options -> Word wrap
   CheckMenuItem(hMenu, IDM_OPT_WORDWRAP, MF_BYCOMMAND | wordwrap ? MF_CHECKED : MF_UNCHECKED);
 
   if (state == STATE_INIT) {
-    EnableMenuItem(hMenu, IDM_FILE_NEW, MF_BYCOMMAND | MF_ENABLED);
-    EnableMenuItem(hMenu, IDM_FILE_OPEN, MF_BYCOMMAND | MF_ENABLED);
-    enableAllSubMenu(IDM_OPT_MEMTYPE_UNSIGNED, true);
-    enableAllSubMenu(IDM_OPT_OUTPUT_HEX, true);
-    enableAllSubMenu(IDM_OPT_INPUT_HEX, true);
-    enableAllSubMenu(IDM_OPT_NOINPUT_FF, true);
-    enableAllSubMenu(IDM_OPT_INTOVF_WRAPAROUND, true);
-    enableAllSubMenu(IDM_OPT_DEBUG, true);
-    enableAllSubMenu(IDM_OPT_SPEED_100MS, true);
-    enableAllSubMenu(IDM_OPT_MEMVIEW, true);
-    enableAllSubMenu(IDM_OPT_HIGHLIGHT_MEMORY, false);
-    enableAllSubMenu(IDM_OPT_WORDWRAP, true);
+    enableMenus(IDM_FILE_NEW, true);
+    enableMenus(IDM_FILE_OPEN, true);
+    enableMenus(IDM_BF_MEMTYPE_UNSIGNED, true);
+    enableMenus(IDM_BF_OUTPUT_HEX, true);
+    enableMenus(IDM_BF_INPUT_HEX, true);
+    enableMenus(IDM_BF_NOINPUT_FF, true);
+    enableMenus(IDM_BF_INTOVF_WRAPAROUND, true);
+    enableMenus(IDM_BF_BREAKPOINT, true);
+    enableMenus(IDM_OPT_SPEED_100MS, true);
+    enableMenus(IDM_OPT_MEMVIEW, true);
+    enableMenus(IDM_OPT_TRACK, true);
+    enableMenus(IDM_OPT_HLTPROG, false);
+    enableMenus(IDM_OPT_HLTMEM, false);
+    enableMenus(IDM_OPT_WORDWRAP, true);
   } else if (state == STATE_RUN) {
-    EnableMenuItem(hMenu, IDM_FILE_NEW, MF_BYCOMMAND | MF_GRAYED);
-    EnableMenuItem(hMenu, IDM_FILE_OPEN, MF_BYCOMMAND | MF_GRAYED);
-    enableAllSubMenu(IDM_OPT_MEMTYPE_UNSIGNED, false);
-    enableAllSubMenu(IDM_OPT_OUTPUT_HEX, false);
-    enableAllSubMenu(IDM_OPT_INPUT_HEX, false);
-    enableAllSubMenu(IDM_OPT_NOINPUT_FF, false);
-    enableAllSubMenu(IDM_OPT_INTOVF_WRAPAROUND, false);
-    enableAllSubMenu(IDM_OPT_DEBUG, true);
-    enableAllSubMenu(IDM_OPT_SPEED_100MS, false);
-    enableAllSubMenu(IDM_OPT_MEMVIEW, true);
-    enableAllSubMenu(IDM_OPT_HIGHLIGHT_MEMORY, false);
-    enableAllSubMenu(IDM_OPT_WORDWRAP, true);
+    enableMenus(IDM_FILE_NEW, false);
+    enableMenus(IDM_FILE_OPEN, false);
+    enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
+    enableMenus(IDM_BF_OUTPUT_HEX, false);
+    enableMenus(IDM_BF_INPUT_HEX, false);
+    enableMenus(IDM_BF_NOINPUT_FF, false);
+    enableMenus(IDM_BF_INTOVF_WRAPAROUND, false);
+    enableMenus(IDM_BF_BREAKPOINT, false);
+    enableMenus(IDM_OPT_SPEED_100MS, false);
+    enableMenus(IDM_OPT_MEMVIEW, false);
+    enableMenus(IDM_OPT_TRACK, false);
+    enableMenus(IDM_OPT_HLTPROG, false);
+    enableMenus(IDM_OPT_HLTMEM, false);
+    enableMenus(IDM_OPT_WORDWRAP, true);
   } else if (state == STATE_PAUSE || state == STATE_FINISH) {
-    EnableMenuItem(hMenu, IDM_FILE_NEW, MF_BYCOMMAND | MF_GRAYED);
-    EnableMenuItem(hMenu, IDM_FILE_OPEN, MF_BYCOMMAND | MF_GRAYED);
-    enableAllSubMenu(IDM_OPT_MEMTYPE_UNSIGNED, false);
-    enableAllSubMenu(IDM_OPT_OUTPUT_HEX, false);
-    enableAllSubMenu(IDM_OPT_INPUT_HEX, false);
-    enableAllSubMenu(IDM_OPT_NOINPUT_FF, false);
-    enableAllSubMenu(IDM_OPT_INTOVF_WRAPAROUND, false);
-    enableAllSubMenu(IDM_OPT_DEBUG, true);
-    enableAllSubMenu(IDM_OPT_SPEED_100MS, true);
-    enableAllSubMenu(IDM_OPT_MEMVIEW, true);
-    enableAllSubMenu(IDM_OPT_HIGHLIGHT_MEMORY, true);
-    enableAllSubMenu(IDM_OPT_WORDWRAP, true);
+    enableMenus(IDM_FILE_NEW, false);
+    enableMenus(IDM_FILE_OPEN, false);
+    enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
+    enableMenus(IDM_BF_OUTPUT_HEX, false);
+    enableMenus(IDM_BF_INPUT_HEX, false);
+    enableMenus(IDM_BF_NOINPUT_FF, false);
+    enableMenus(IDM_BF_INTOVF_WRAPAROUND, false);
+    enableMenus(IDM_BF_BREAKPOINT, true);
+    enableMenus(IDM_OPT_SPEED_100MS, true);
+    enableMenus(IDM_OPT_MEMVIEW, true);
+    enableMenus(IDM_OPT_TRACK, true);
+    enableMenus(IDM_OPT_HLTPROG, true);
+    enableMenus(IDM_OPT_HLTMEM, true);
+    enableMenus(IDM_OPT_WORDWRAP, true);
   }
 }
 
@@ -392,9 +398,9 @@ INT_PTR CALLBACK memViewProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
           long temp;
           GetDlgItemTextW(hDlg, IDG_FROM, (wchar_t *)editBuf, 10);
           temp = wcstol(editBuf, NULL, 10);
-          if (temp < 0)
+          if (temp < 0) {
             MessageBoxW(hDlg, L"Invalid input.", L"Error", MB_ICONWARNING);
-          else {
+          } else {
             memViewStart = temp;
             EndDialog(hDlg, IDOK);
           }
@@ -425,7 +431,6 @@ void setState(enum state_t _state, bool _force) {
     for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
       EnableWindow(hScrKB[i], TRUE);
     }
-    memset(memCache, -1, sizeof(memCache));
   } else if (_state == STATE_RUN) {
     EnableWindow(hCmdBtn[0], FALSE);  // run button
     EnableWindow(hCmdBtn[1], FALSE);  // next button
@@ -474,19 +479,14 @@ void setSelectMemView(unsigned int _memPtr) {
 }
 
 void setMemory(const std::vector<unsigned char> *memory) {
-  static unsigned int prevStart = 0;
-  bool isCacheValid = prevStart == memViewStart;
-
   if (!memory) {
     SetWindowTextW(hMemView, NULL);
-    memset(memCache, -1, sizeof(memCache));
     return;
   }
 
   unsigned int i;
+  std::wstring wstrOut;
   for (i = memViewStart; i < memViewStart + 100 && i < memory->size(); ++i) {
-    if (isCacheValid && memCache[i - memViewStart] == memory->at(i)) continue;
-    memCache[i - memViewStart] = memory->at(i);
     wchar_t wcOut[] = {0, 0, L' ', 0};
     unsigned char high = memory->at(i) >> 4, low = memory->at(i) & 0xF;
     if (high < 10) {
@@ -499,11 +499,9 @@ void setMemory(const std::vector<unsigned char> *memory) {
     } else {
       wcOut[1] = L'A' + (low - 10);
     }
-    SendMessageW(hMemView, EM_SETSEL, (i - memViewStart) * 3, (i - memViewStart + 1) * 3);
-    SendMessageW(hMemView, EM_REPLACESEL, 0, (WPARAM)wcOut);
+    wstrOut.append(wcOut);
   }
-  isCacheValid = true;
-  SendMessageW(hMemView, EM_SETSEL, -1, 0);
+  SetWindowTextW(hMemView, wstrOut.c_str());
 }
 
 wchar_t *getEditor() {

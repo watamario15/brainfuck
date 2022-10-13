@@ -54,38 +54,41 @@ Menu MENU
         MENUITEM "Save &As...", IDM_FILE_SAVE_AS
         MENUITEM "&Exit", IDM_FILE_EXIT
     }
-    POPUP "&Options"
+    POPUP "&Brainfuck"
     {
         POPUP "&Memory type"
         {
-            MENUITEM "&Signed (-128 to 127)", IDM_OPT_MEMTYPE_SIGNED
-            MENUITEM "&Unsigned (0 to 255)", IDM_OPT_MEMTYPE_UNSIGNED
+            MENUITEM "&Signed (-128 to 127)", IDM_BF_MEMTYPE_SIGNED
+            MENUITEM "&Unsigned (0 to 255)", IDM_BF_MEMTYPE_UNSIGNED
         }
         POPUP "&Output charset"
         {
-            MENUITEM "&ASCII (realtime output)", IDM_OPT_OUTPUT_ASCII
-            MENUITEM "&UTF-8 (bufferred output)", IDM_OPT_OUTPUT_UTF8
-            MENUITEM "Shift_&JIS (bufferred output)", IDM_OPT_OUTPUT_SJIS
-            MENUITEM "&Hexadecimal (realtime output)", IDM_OPT_OUTPUT_HEX
+            MENUITEM "&ASCII (real time output)", IDM_BF_OUTPUT_ASCII
+            MENUITEM "&UTF-8 (bufferred output)", IDM_BF_OUTPUT_UTF8
+            MENUITEM "Shift_&JIS (bufferred output)", IDM_BF_OUTPUT_SJIS
+            MENUITEM "&Hexadecimal (real time output)", IDM_BF_OUTPUT_HEX
         }
         POPUP "Input &charset"
         {
-            MENUITEM "&UTF-8", IDM_OPT_INPUT_UTF8
-            MENUITEM "Shift_&JIS", IDM_OPT_INPUT_SJIS
-            MENUITEM "&Hexadecimal", IDM_OPT_INPUT_HEX
+            MENUITEM "&UTF-8", IDM_BF_INPUT_UTF8
+            MENUITEM "Shift_&JIS", IDM_BF_INPUT_SJIS
+            MENUITEM "&Hexadecimal", IDM_BF_INPUT_HEX
         }
         POPUP "&Input instruction"
         {
-            MENUITEM "&Error on no input", IDM_OPT_NOINPUT_ERROR
-            MENUITEM "&Zero on no input", IDM_OPT_NOINPUT_ZERO
-            MENUITEM "&FF (-1 or 255) on no input", IDM_OPT_NOINPUT_FF
+            MENUITEM "&Error on no input", IDM_BF_NOINPUT_ERROR
+            MENUITEM "&Zero on no input", IDM_BF_NOINPUT_ZERO
+            MENUITEM "&FF (-1 or 255) on no input", IDM_BF_NOINPUT_FF
         }
         POPUP "Integer &overflow"
         {
-            MENUITEM "&Error", IDM_OPT_INTOVF_ERROR
-            MENUITEM "&Wrap around", IDM_OPT_INTOVF_WRAPAROUND
+            MENUITEM "&Error", IDM_BF_INTOVF_ERROR
+            MENUITEM "&Wrap around", IDM_BF_INTOVF_WRAPAROUND
         }
-        MENUITEM "&Breakpoint instruction (@)", IDM_OPT_DEBUG
+        MENUITEM "&Breakpoint instruction (@)", IDM_BF_BREAKPOINT
+    }
+    POPUP "&Options"
+    {
         POPUP "&Speed"
         {
             MENUITEM "&Fastest", IDM_OPT_SPEED_FASTEST
@@ -94,7 +97,9 @@ Menu MENU
             MENUITEM "100 ms (&h)", IDM_OPT_SPEED_100MS
         }
         MENUITEM "Memory &view...", IDM_OPT_MEMVIEW
-        MENUITEM "&Highlight memory pointer", IDM_OPT_HIGHLIGHT_MEMORY
+        MENUITEM "&Real time debugging (slow)", IDM_OPT_TRACK
+        MENUITEM "Highlight &program pointer", IDM_OPT_HLTPROG
+        MENUITEM "Highlight &memory pointer", IDM_OPT_HLTMEM
         MENUITEM "&Word wrap", IDM_OPT_WORDWRAP
     }
     MENUITEM "&About", IDM_ABOUT

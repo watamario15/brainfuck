@@ -9,7 +9,7 @@ namespace ui {
 enum state_t { STATE_INIT, STATE_RUN, STATE_PAUSE, STATE_FINISH };
 
 extern enum state_t state;
-extern bool signedness, wrapInt, breakpoint, debug;
+extern bool signedness, wrapInt, breakpoint, debug, dark;
 extern int speed, outCharSet, inCharSet;
 extern enum Brainfuck::noinput_t noInput;
 extern HWND hWnd;
@@ -27,6 +27,9 @@ void onSize();
 // WM_ACTIVATE handler.
 void onActivate();
 
+// Updates the menu.
+void onInitMenuPopup();
+
 #ifndef UNDER_CE
 // WM_DROPFILES handler.
 void onDropFiles(HDROP hDrop);
@@ -38,17 +41,14 @@ void onScreenKeyboard(int _key);
 // Sets a UI state.
 void setState(enum state_t _state, bool _force = false);
 
-// Focus on the editor.
+// Sets focus on the editor.
 void setFocus();
 
-// Sets selection on the editor.
-void setSelect(unsigned int _progPtr);
+// Sets a selection on the editor.
+void selProg(unsigned int _progPtr);
 
-// Set focus on memory view
-void setSelectMemView(unsigned int _memPtr);
-
-// Update the menu.
-void onInitMenuPopup();
+// Sets a selection on the memory view.
+void selMemView(unsigned int _memPtr);
 
 // Memory view settings dialog.
 INT_PTR CALLBACK memViewProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -73,10 +73,13 @@ void appendOutput(const wchar_t *_str);
 // Sets memory. Clears the memory view when NULL is given.
 void setMemory(const std::vector<unsigned char> *memory);
 
-// Switch between wordwrap enabled and disabled for edit controls.
+// Switches between wordwrap enabled and disabled for edit controls.
 void switchWordwrap();
 
-// Check if there will be data loss. If so, suggests to save.
+// Switches between dark/light theme.
+void switchTheme();
+
+// Checks if there will be data loss. If so, suggests to save.
 // `true` means you can continue a data losing action.
 bool promptSave();
 

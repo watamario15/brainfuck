@@ -37,14 +37,14 @@ FILETYPE        VFT_APP
 // Icon
 //
 
-// Icon ICON "app.ico"
+// "ICON" ICON "app.ico"
 
 
 //
 // Menu
 //
 
-Menu MENU
+"MENU" MENU
 {
     POPUP "&File"
     {
@@ -100,6 +100,7 @@ Menu MENU
         MENUITEM "&Real time debugging (slow)", IDM_OPT_TRACK
         MENUITEM "Highlight &program pointer", IDM_OPT_HLTPROG
         MENUITEM "Highlight &memory pointer", IDM_OPT_HLTMEM
+        MENUITEM "&Dark theme", IDM_OPT_DARK
         MENUITEM "&Word wrap", IDM_OPT_WORDWRAP
     }
     MENUITEM "&About", IDM_ABOUT
@@ -109,7 +110,7 @@ Menu MENU
 // Dialog (memory view range)
 //
 
-MemViewOpt DIALOG 0, 0, 200, 100
+"MEMVIEWOPT" DIALOG 0, 0, 200, 100
 STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Memory view options"
 FONT 9, "MS Shell Dlg"

@@ -33,7 +33,7 @@ void Brainfuck::reset(size_t _progLen, const wchar_t *_program, size_t _inLen, c
     input = NULL;
     inLen = 0;
   } else {
-    input = (const unsigned char*)_input;
+    input = (const unsigned char *)_input;
     inLen = _inLen;
   }
   inIndex = 0;

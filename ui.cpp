@@ -36,6 +36,7 @@
 #include "ui.hpp"
 
 namespace ui {
+enum newline_t { NEWLINE_CRLF, NEWLINE_LF, NEWLINE_CR };
 static const wchar_t *wcCmdBtn[] = {L"Run", L"Next", L"Pause", L"End"},
                      *wcScrKB[] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]", L"@"};
 static HWND hEditor, hInput, hOutput, hMemView, hCmdBtn[sizeof(wcCmdBtn) / sizeof(wcCmdBtn[0])],
@@ -47,16 +48,77 @@ static unsigned int memViewStart = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
 static std::wstring wstrFileName;
 static bool withBOM = false, wordwrap = false;
+static enum newline_t newLine = NEWLINE_CRLF;
 #ifdef UNDER_CE
 static HWND hCmdBar;
 #endif
 
 enum state_t state = STATE_INIT;
-bool signedness = true, wrapInt = true, breakpoint = false, debug = false;
+bool signedness = true, wrapInt = true, breakpoint = false, debug = false, dark = true;
 int speed = 10, outCharSet = IDM_BF_OUTPUT_ASCII, inCharSet = IDM_BF_INPUT_UTF8;
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
 HWND hWnd;
 HINSTANCE hInst;
+
+// Translates newline characters from CRLF/LF/CR/LFCR to CRLF/LF/CR.
+// `_target`: A `std::wstring` to operate on, `_newLine`: A desired newline code.
+static enum newline_t convertCRLF(std::wstring &_target, enum newline_t _newLine) {
+  std::wstring::iterator iter = _target.begin();
+  std::wstring::iterator iterEnd = _target.end();
+  std::wstring temp;
+  const wchar_t *nl;
+  size_t CRs = 0, LFs = 0, CRLFs = 0;
+  if (_newLine == NEWLINE_LF) {
+    nl = L"\n";
+  } else if (_newLine == NEWLINE_CR) {
+    nl = L"\r";
+  } else {
+    nl = L"\r\n";
+  }
+
+  if (0 < _target.size()) {
+    wchar_t bNextChar = *iter++;
+
+    while (true) {
+      if (L'\r' == bNextChar) {
+        temp += nl;                  // Newline
+        if (iter == iterEnd) break;  // EOF
+        bNextChar = *iter++;         // Retrive a character
+        if (L'\n' == bNextChar) {
+          if (iter == iterEnd) break;  // EOF
+          bNextChar = *iter++;         // Retrive a character
+          CRLFs++;
+        } else {
+          CRs++;
+        }
+      } else if (L'\n' == bNextChar) {
+        temp += nl;                    // Newline
+        if (iter == iterEnd) break;    // EOF
+        bNextChar = *iter++;           // Retrive a character
+        if (L'\r' == bNextChar) {      // Broken LFCR, so don't count
+          if (iter == iterEnd) break;  // EOF
+          bNextChar = *iter++;         // Retrive a character
+        } else {
+          LFs++;
+        }
+      } else {
+        temp += bNextChar;           // Not a newline
+        if (iter == iterEnd) break;  // EOF
+        bNextChar = *iter++;         // Retrive a character
+      }
+    }
+  }
+
+  _target = temp;
+
+  if (LFs > CRLFs && LFs >= CRs) {
+    return NEWLINE_LF;
+  } else if (CRs > LFs && CRs > CRLFs) {
+    return NEWLINE_CR;
+  } else {
+    return NEWLINE_CRLF;
+  }
+}
 
 // Enables/Disables menu items from the smaller nearest 10 multiple to `_endID`.
 static void enableMenus(unsigned int _endID, bool _enable) {
@@ -72,7 +134,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   hInst = _hInst;
 
 #ifdef UNDER_CE
-  wchar_t wcMenu[] = L"Menu";  // CommandBar_InsertMenubarEx requires non-const value
+  wchar_t wcMenu[] = L"MENU";  // CommandBar_InsertMenubarEx requires non-const value
   InitCommonControls();
   hCmdBar = CommandBar_Create(hInst, hWnd, 1);
   CommandBar_InsertMenubarEx(hCmdBar, hInst, wcMenu, 0);
@@ -80,7 +142,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   topPadding = CommandBar_Height(hCmdBar);
   hMenu = CommandBar_GetMenu(hCmdBar, 0);
 #else
-  hMenu = LoadMenu(hInst, L"Menu");
+  hMenu = LoadMenu(hInst, L"MENU");
   SetMenu(hWnd, hMenu);
 #endif
 
@@ -254,6 +316,9 @@ void onInitMenuPopup() {
   // Options -> Debug
   CheckMenuItem(hMenu, IDM_OPT_TRACK, MF_BYCOMMAND | debug ? MF_CHECKED : MF_UNCHECKED);
 
+  // Options -> Dark theme
+  CheckMenuItem(hMenu, IDM_OPT_DARK, MF_BYCOMMAND | dark ? MF_CHECKED : MF_UNCHECKED);
+
   // Options -> Word wrap
   CheckMenuItem(hMenu, IDM_OPT_WORDWRAP, MF_BYCOMMAND | wordwrap ? MF_CHECKED : MF_UNCHECKED);
 
@@ -271,7 +336,6 @@ void onInitMenuPopup() {
     enableMenus(IDM_OPT_TRACK, true);
     enableMenus(IDM_OPT_HLTPROG, false);
     enableMenus(IDM_OPT_HLTMEM, false);
-    enableMenus(IDM_OPT_WORDWRAP, true);
   } else if (state == STATE_RUN) {
     enableMenus(IDM_FILE_NEW, false);
     enableMenus(IDM_FILE_OPEN, false);
@@ -286,7 +350,6 @@ void onInitMenuPopup() {
     enableMenus(IDM_OPT_TRACK, false);
     enableMenus(IDM_OPT_HLTPROG, false);
     enableMenus(IDM_OPT_HLTMEM, false);
-    enableMenus(IDM_OPT_WORDWRAP, true);
   } else if (state == STATE_PAUSE || state == STATE_FINISH) {
     enableMenus(IDM_FILE_NEW, false);
     enableMenus(IDM_FILE_OPEN, false);
@@ -301,7 +364,6 @@ void onInitMenuPopup() {
     enableMenus(IDM_OPT_TRACK, true);
     enableMenus(IDM_OPT_HLTPROG, true);
     enableMenus(IDM_OPT_HLTMEM, true);
-    enableMenus(IDM_OPT_WORDWRAP, true);
   }
 }
 
@@ -472,9 +534,9 @@ void setState(enum state_t _state, bool _force) {
 
 void setFocus() { SetFocus(hEditor); }
 
-void setSelect(unsigned int _progPtr) { SendMessageW(hEditor, EM_SETSEL, _progPtr, _progPtr + 1); }
+void selProg(unsigned int _progPtr) { SendMessageW(hEditor, EM_SETSEL, _progPtr, _progPtr + 1); }
 
-void setSelectMemView(unsigned int _memPtr) {
+void selMemView(unsigned int _memPtr) {
   SendMessageW(hMemView, EM_SETSEL, (_memPtr - memViewStart) * 3, (_memPtr - memViewStart) * 3 + 2);
 }
 
@@ -588,6 +650,15 @@ void switchWordwrap() {
   delete[] wcOutput;
 }
 
+void switchTheme() {
+  dark = !dark;
+
+  InvalidateRect(hEditor, NULL, TRUE);
+  InvalidateRect(hInput, NULL, TRUE);
+  InvalidateRect(hOutput, NULL, TRUE);
+  InvalidateRect(hMemView, NULL, TRUE);
+}
+
 bool promptSave() {
   if (SendMessageW(hEditor, EM_GETMODIFY, 0, 0) == 0) return true;
 
@@ -621,6 +692,7 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
     SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
     wstrFileName = L"";
     withBOM = false;
+    newLine = NEWLINE_CRLF;
     return;
   }
 
@@ -665,14 +737,17 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   wchar_t *wcFileBuf = new wchar_t[length + 1]();
   MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, wcFileBuf, length);
 
-  SetWindowTextW(hEditor, wcFileBuf);
+  std::wstring converted = wcFileBuf;
+  delete[] wcFileBuf;
+  newLine = convertCRLF(converted, NEWLINE_CRLF);
+
+  SetWindowTextW(hEditor, converted.c_str());
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
   wstrFileName = _fileName;
   withBOM = padding != 0;
 
   CloseHandle(hFile);
   delete[] fileBuf;
-  delete[] wcFileBuf;
 
   std::wstring title = L"[";
   title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1) + L"] - " APP_NAME);
@@ -703,6 +778,17 @@ bool saveFile(bool _isOverwrite) {
     wstrFileName.copy(wcFileName, MAX_PATH);
   }
 
+  int editorSize = GetWindowTextLengthW(hEditor) + 1;
+  wchar_t *wcEditor = new wchar_t[editorSize];
+  GetWindowTextW(hEditor, wcEditor, editorSize);
+  std::wstring converted = wcEditor;
+  delete[] wcEditor;
+
+  if (newLine != NEWLINE_CRLF) convertCRLF(converted, newLine);
+  int length = WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, NULL, 0, NULL, NULL);
+  char *szEditor = new char[length];
+  WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, szEditor, length, NULL, NULL);
+
   HANDLE hFile = CreateFileW(wcFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
                              FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
@@ -710,12 +796,6 @@ bool saveFile(bool _isOverwrite) {
     return false;
   }
 
-  int editorSize = GetWindowTextLengthW(hEditor) + 1;
-  wchar_t *wcEditor = new wchar_t[editorSize];
-  GetWindowTextW(hEditor, wcEditor, editorSize);
-  int length = WideCharToMultiByte(CP_UTF8, 0, wcEditor, -1, NULL, 0, NULL, NULL);
-  char *szEditor = new char[length];
-  WideCharToMultiByte(CP_UTF8, 0, wcEditor, -1, szEditor, length, NULL, NULL);
   DWORD dwTemp;
   if (withBOM) WriteFile(hFile, "\xEF\xBB\xBF", 3, &dwTemp, NULL);
   WriteFile(hFile, szEditor, length - 1, &dwTemp, NULL);
@@ -724,7 +804,6 @@ bool saveFile(bool _isOverwrite) {
   wstrFileName = wcFileName;
 
   CloseHandle(hFile);
-  delete[] wcEditor;
   delete[] szEditor;
 
   std::wstring title = L"[";

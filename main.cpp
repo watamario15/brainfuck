@@ -31,14 +31,14 @@
 #define wWinMain WinMain
 #define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
   CreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
-#define TTYPE DWORD
+typedef DWORD tret_t;  // Return type for thread functions
 #include <commctrl.h>
 #include <commdlg.h>
 #else
 #include <process.h>
 #define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
   (HANDLE) _beginthreadex(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
-#define TTYPE unsigned int
+typedef unsigned int tret_t;  // Return type for thread functions
 #endif
 
 #define WND_CLASS_NAME L"brainfuck-main"
@@ -205,7 +205,7 @@ static enum Brainfuck::result_t bfNext() {
 }
 
 // Executes an Brainfuck program until it completes.
-TTYPE WINAPI threadRunner(LPVOID lpParameter) {
+tret_t WINAPI threadRunner(LPVOID lpParameter) {
   UNREFERENCED_PARAMETER(lpParameter);
 
   HANDLE hEvent = 0;
@@ -230,7 +230,7 @@ TTYPE WINAPI threadRunner(LPVOID lpParameter) {
     if ((result = bfNext()) != Brainfuck::RESULT_RUN) break;
     if (ui::debug) {
       ui::setMemory(&g_bf->getMemory());
-      ui::setSelect(g_bf->getProgPtr());
+      ui::selProg(g_bf->getProgPtr());
     }
   }
 
@@ -247,7 +247,7 @@ TTYPE WINAPI threadRunner(LPVOID lpParameter) {
       ui::setState(result == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
     }
     ui::setMemory(&g_bf->getMemory());
-    ui::setSelect(g_bf->getProgPtr());
+    ui::selProg(g_bf->getProgPtr());
   }
 
   PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
@@ -256,6 +256,7 @@ TTYPE WINAPI threadRunner(LPVOID lpParameter) {
 
 static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static bool didInit = false;
+  static HBRUSH BGDark = CreateSolidBrush(0x3f3936);
 
   switch (uMsg) {
     case WM_CREATE:
@@ -280,6 +281,24 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) ui::onActivate();
       break;
 
+    case WM_CTLCOLOREDIT:
+      if (ui::dark) {
+        SetTextColor((HDC)wParam, 0x00ff00);
+        SetBkColor((HDC)wParam, 0x3f3936);
+        return (LRESULT)BGDark;
+      } else {
+        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+      }
+
+    case WM_CTLCOLORSTATIC:
+      if (ui::dark) {
+        SetTextColor((HDC)wParam, 0x00ff00);
+        SetBkColor((HDC)wParam, 0x000000);
+        return (LRESULT)GetStockObject(BLACK_BRUSH);
+      } else {
+        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+      }
+
 #ifndef UNDER_CE
     case WM_DROPFILES:
       ui::onDropFiles((HDROP)wParam);
@@ -299,6 +318,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
     case WM_DESTROY:
       delete g_bf;
+      DeleteObject(BGDark);
       ui::onDestroy();
       PostQuitMessage(0);
       break;
@@ -337,7 +357,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
           ui::setState(bfNext() == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
           ui::setMemory(&g_bf->getMemory());
-          ui::setSelect(g_bf->getProgPtr());
+          ui::selProg(g_bf->getProgPtr());
           break;
 
         case IDC_CMDBTN_FIRST + 2:  // Pause
@@ -453,7 +473,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDM_OPT_MEMVIEW:
-          if (DialogBoxW(ui::hInst, L"MemViewOpt", hWnd, ui::memViewProc) == IDOK &&
+          if (DialogBoxW(ui::hInst, L"MEMVIEWOPT", hWnd, ui::memViewProc) == IDOK &&
               ui::state != ui::STATE_INIT) {
             ui::setMemory(&g_bf->getMemory());
           }
@@ -464,11 +484,15 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDM_OPT_HLTPROG:
-          ui::setSelect(g_bf->getProgPtr());
+          ui::selProg(g_bf->getProgPtr());
           break;
 
         case IDM_OPT_HLTMEM:
-          ui::setSelectMemView(g_bf->getMemPtr());
+          ui::selMemView(g_bf->getMemPtr());
+          break;
+
+        case IDM_OPT_DARK:
+          ui::switchTheme();
           break;
 
         case IDM_OPT_WORDWRAP:

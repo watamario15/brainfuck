@@ -1,12 +1,8 @@
 #ifndef DEF_H_
 #define DEF_H_
 
-#define WND_CLASS_NAME L"brainfuck-main"
 #define APP_NAME L"Brain fuck"
 #define APP_VERSION L"1.0"
-#define APP_COPYRIGHT "(C) 2022 watamario15"
-#define WM_APP_THREADEND WM_APP
-#define IDT_RUN 1
 
 #define VER_STR_COMPANYNAME "watamario15"
 #define VER_STR_DESCRIPTION "Brainfuck interpreter for SHARP Brain"

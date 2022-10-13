@@ -41,11 +41,14 @@
 #define TTYPE unsigned int
 #endif
 
+#define WND_CLASS_NAME L"brainfuck-main"
+#define WM_APP_THREADEND WM_APP
+
 #include <stdexcept>
 #include <vector>
 
 #include "bf.hpp"
-#include "def.h"
+#include "resource.h"
 #include "ui.hpp"
 
 // Expecting `int` to be atomic

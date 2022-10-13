@@ -32,7 +32,7 @@
 #include <string>
 
 #include "bf.hpp"
-#include "def.h"
+#include "resource.h"
 #include "ui.hpp"
 
 namespace ui {

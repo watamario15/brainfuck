@@ -1,4 +1,4 @@
-#ifdef _MSC_VER
+#if defined UNDER_CE || (defined _MSC_VER && _MSC_VER < 1800)
 #define PRIu64 "I64u"
 #else
 #define PRIu64 "zu"
@@ -28,7 +28,6 @@ void Brainfuck::reset(size_t _progLen, const wchar_t *_program, size_t _inLen, c
   }
   progIndex = 0;
 
-  if (input) delete[] input;
   if (_inLen == 0 || !_input) {
     input = NULL;
     inLen = 0;

@@ -51,8 +51,7 @@ typedef unsigned int tret_t;  // Return type for thread functions
 #include "resource.h"
 #include "ui.hpp"
 
-// Expecting `int` to be atomic
-enum ctrlthread_t : int { CTRLTHREAD_RUN, CTRLTHREAD_PAUSE, CTRLTHREAD_END };
+enum ctrlthread_t { CTRLTHREAD_RUN, CTRLTHREAD_PAUSE, CTRLTHREAD_END };
 
 static class Brainfuck *g_bf;
 static unsigned int g_timerID = 0;
@@ -122,7 +121,7 @@ static bool bfInit() {
       if (wcInput[i] == L'\0') break;
     }
     input = vecIn.empty() ? NULL : &vecIn.front();
-    inLen = vecIn.size();
+    inLen = (int)vecIn.size();
   } else {
     int codePage = (ui::inCharSet == IDM_BF_INPUT_SJIS) ? 932 : CP_UTF8;
     inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)NULL, 0, NULL, NULL);
@@ -131,7 +130,8 @@ static bool bfInit() {
     inLen--;
   }
 
-  g_bf->reset(wcslen(ui::getEditor()), ui::getEditor(), inLen, input);
+  wchar_t *wcEditor = ui::getEditor();
+  g_bf->reset(wcslen(wcEditor), wcEditor, inLen, input);
 
   return true;
 }
@@ -163,10 +163,11 @@ static enum Brainfuck::result_t bfNext() {
     if (!g_outBuf.empty()) {
       int codePage = (ui::outCharSet == IDM_BF_OUTPUT_SJIS) ? 932 : CP_UTF8;
       if (g_outBuf.back() != 0) g_outBuf.push_back(0);  // null terminator
-      int outLen = MultiByteToWideChar(codePage, 0, (char *)&g_outBuf.front(), g_outBuf.size(),
+      int outLen = MultiByteToWideChar(codePage, 0, (char *)&g_outBuf.front(), (int)g_outBuf.size(),
                                        (wchar_t *)NULL, 0);
       wchar_t *wcOut = new wchar_t[outLen];
-      MultiByteToWideChar(codePage, 0, (char *)&g_outBuf.front(), g_outBuf.size(), wcOut, outLen);
+      MultiByteToWideChar(codePage, 0, (char *)&g_outBuf.front(), (int)g_outBuf.size(), wcOut,
+                          outLen);
       ui::setOutput(wcOut);
       delete[] wcOut;
     }
@@ -230,7 +231,7 @@ tret_t WINAPI threadRunner(LPVOID lpParameter) {
     if ((result = bfNext()) != Brainfuck::RESULT_RUN) break;
     if (ui::debug) {
       ui::setMemory(&g_bf->getMemory());
-      ui::selProg(g_bf->getProgPtr());
+      ui::selProg((int)g_bf->getProgPtr());
     }
   }
 
@@ -247,7 +248,7 @@ tret_t WINAPI threadRunner(LPVOID lpParameter) {
       ui::setState(result == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
     }
     ui::setMemory(&g_bf->getMemory());
-    ui::selProg(g_bf->getProgPtr());
+    ui::selProg((int)g_bf->getProgPtr());
   }
 
   PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
@@ -278,7 +279,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
 
     case WM_ACTIVATE:
-      if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) ui::onActivate();
+      if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) ui::updateFocus(-1);
       break;
 
     case WM_CTLCOLOREDIT:
@@ -303,6 +304,12 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     case WM_DROPFILES:
       ui::onDropFiles((HDROP)wParam);
       break;
+
+    case 0x2e0:  // WM_DPICHANGED
+      MoveWindow(ui::hWnd, ((PRECT)lParam)->left, ((PRECT)lParam)->top,
+                 ((PRECT)lParam)->right - ((PRECT)lParam)->left,
+                 ((PRECT)lParam)->bottom - ((PRECT)lParam)->top, FALSE);
+      break;
 #endif
 
     case WM_APP_THREADEND:
@@ -324,6 +331,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
 
     case WM_COMMAND:
+      ui::updateFocus(LOWORD(wParam));
       switch (LOWORD(wParam)) {
         case IDC_CMDBTN_FIRST:  // Run
           if (!didInit) {
@@ -357,7 +365,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
           ui::setState(bfNext() == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
           ui::setMemory(&g_bf->getMemory());
-          ui::selProg(g_bf->getProgPtr());
+          ui::selProg((int)g_bf->getProgPtr());
           break;
 
         case IDC_CMDBTN_FIRST + 2:  // Pause
@@ -393,6 +401,22 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case IDM_FILE_EXIT:
           SendMessageW(hWnd, WM_CLOSE, 0, 0);
+          break;
+
+        case IDM_EDIT_CUT:
+          ui::cut();
+          break;
+
+        case IDM_EDIT_COPY:
+          ui::copy();
+          break;
+
+        case IDM_EDIT_PASTE:
+          ui::paste();
+          break;
+
+        case IDM_EDIT_SELALL:
+          ui::selAll();
           break;
 
         case IDM_BF_MEMTYPE_SIGNED:
@@ -473,7 +497,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDM_OPT_MEMVIEW:
-          if (DialogBoxW(ui::hInst, L"MEMVIEWOPT", hWnd, ui::memViewProc) == IDOK &&
+          if (DialogBoxW(ui::hInst, L"memviewopt", hWnd, ui::memViewProc) == IDOK &&
               ui::state != ui::STATE_INIT) {
             ui::setMemory(&g_bf->getMemory());
           }
@@ -484,11 +508,11 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDM_OPT_HLTPROG:
-          ui::selProg(g_bf->getProgPtr());
+          ui::selProg((int)g_bf->getProgPtr());
           break;
 
         case IDM_OPT_HLTMEM:
-          ui::selMemView(g_bf->getMemPtr());
+          ui::selMemView((int)g_bf->getMemPtr());
           break;
 
         case IDM_OPT_DARK:
@@ -507,10 +531,6 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           if (LOWORD(wParam) >= IDC_SCRKBD_FIRST && LOWORD(wParam) <= IDC_SCRKBD_FIRST + 8) {
             ui::onScreenKeyboard(LOWORD(wParam) - IDC_SCRKBD_FIRST);
           }
-      }
-      if (LOWORD(wParam) != IDC_EDITOR && LOWORD(wParam) != IDC_INPUT &&
-          LOWORD(wParam) != IDC_OUTPUT && LOWORD(wParam) != IDC_MEMVIEW) {
-        ui::setFocus();
       }
       break;
 
@@ -535,10 +555,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
   wcl.lpszClassName = WND_CLASS_NAME;
   wcl.lpfnWndProc = wndProc;
   wcl.style = 0;
-  wcl.hIcon = NULL;
 #ifdef UNDER_CE
+  wcl.hIcon = NULL;
   wcl.hCursor = NULL;
 #else
+  wcl.hIcon = LoadIconW(hInstance, L"icon");
   wcl.hCursor = LoadCursorW(NULL, IDC_ARROW);
 #endif
   wcl.lpszMenuName = NULL;
@@ -559,10 +580,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 #endif
   UpdateWindow(hWnd);
 
+  HACCEL hAccel = LoadAcceleratorsW(hInstance, L"accel");
   MSG msg;
   while (GetMessageW(&msg, NULL, 0, 0)) {
-    TranslateMessage(&msg);
-    DispatchMessageW(&msg);
+    if (!TranslateAcceleratorW(hWnd, hAccel, &msg)) {
+      TranslateMessage(&msg);
+      DispatchMessageW(&msg);
+    }
   }
 
   return (int)msg.wParam;

@@ -58,7 +58,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 commctrl.lib coredll.lib /nologo /base:"0x00010000" /stack:0x10000,0x1000 /entry:"WinMainCRTStartup" /nodefaultlib:"$(CENoDefaultLib)" /subsystem:$(CESubsystem) /MACHINE:THUMB
-# ADD LINK32 commctrl.lib coredll.lib mmtimer.lib /nologo /base:"0x00010000" /stack:0x10000,0x1000 /entry:"WinMainCRTStartup" /nodefaultlib:"$(CENoDefaultLib)" /out:"ARMV4IRel/AppMain_.exe" /subsystem:$(CESubsystem) /MACHINE:THUMB
+# ADD LINK32 commctrl.lib mmtimer.lib /nologo /base:"0x00010000" /stack:0x10000,0x1000 /entry:"WinMainCRTStartup" /nodefaultlib:"$(CENoDefaultLib)" /out:"ARMV4IRel/AppMain_.exe" /subsystem:$(CESubsystem) /MACHINE:THUMB
 
 !ELSEIF  "$(CFG)" == "brainfuck_evc4 - Win32 (WCE ARMV4I) Debug"
 
@@ -88,7 +88,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 commctrl.lib coredll.lib /nologo /base:"0x00010000" /stack:0x10000,0x1000 /entry:"WinMainCRTStartup" /debug /nodefaultlib:"$(CENoDefaultLib)" /subsystem:$(CESubsystem) /MACHINE:THUMB
-# ADD LINK32 commctrl.lib coredll.lib mmtimer.lib /nologo /base:"0x00010000" /stack:0x10000,0x1000 /entry:"WinMainCRTStartup" /debug /nodefaultlib:"$(CENoDefaultLib)" /out:"ARMV4IDbg/AppMain_.exe" /subsystem:$(CESubsystem) /MACHINE:THUMB
+# ADD LINK32 commctrl.lib mmtimer.lib /nologo /base:"0x00010000" /stack:0x10000,0x1000 /entry:"WinMainCRTStartup" /debug /nodefaultlib:"$(CENoDefaultLib)" /out:"ARMV4IDbg/AppMain_.exe" /subsystem:$(CESubsystem) /MACHINE:THUMB
 
 !ENDIF 
 
@@ -111,7 +111,7 @@ DEP_CPP_BF_CP=\
 SOURCE=..\main.cpp
 DEP_CPP_MAIN_=\
 	"..\bf.hpp"\
-	"..\def.h"\
+	"..\resource.h"\
 	"..\ui.hpp"\
 	
 # End Source File
@@ -120,7 +120,7 @@ DEP_CPP_MAIN_=\
 SOURCE=..\ui.cpp
 DEP_CPP_UI_CP=\
 	"..\bf.hpp"\
-	"..\def.h"\
+	"..\resource.h"\
 	"..\ui.hpp"\
 	
 # End Source File
@@ -134,7 +134,7 @@ SOURCE=..\bf.hpp
 # End Source File
 # Begin Source File
 
-SOURCE=..\def.h
+SOURCE=..\resource.h
 # End Source File
 # Begin Source File
 
@@ -146,7 +146,11 @@ SOURCE=..\ui.hpp
 # PROP Default_Filter "ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"
 # Begin Source File
 
-SOURCE=..\res.rc
+SOURCE=..\app.ico
+# End Source File
+# Begin Source File
+
+SOURCE=..\resource.rc
 # End Source File
 # End Group
 # End Target

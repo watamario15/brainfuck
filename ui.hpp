@@ -24,9 +24,6 @@ void onDestroy();
 // WM_SIZE handler.
 void onSize();
 
-// WM_ACTIVATE handler.
-void onActivate();
-
 // Updates the menu.
 void onInitMenuPopup();
 
@@ -41,8 +38,21 @@ void onScreenKeyboard(int _key);
 // Sets a UI state.
 void setState(enum state_t _state, bool _force = false);
 
-// Sets focus on the editor.
-void setFocus();
+// Focuses on a recently focused edit control if a non-edit ID is given.
+// Updates internal information if an edit control ID is given.
+void updateFocus(int _id = -1);
+
+// Cut
+void cut();
+
+// Copy
+void copy();
+
+// Paste
+void paste();
+
+// Select All
+void selAll();
 
 // Sets a selection on the editor.
 void selProg(unsigned int _progPtr);

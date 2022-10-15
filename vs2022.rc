@@ -134,12 +134,3 @@ FONT 9, "MS Shell Dlg"
    DEFPUSHBUTTON "&OK", IDG_OK, 80, 80, 50, 12
    PUSHBUTTON "&Cancel", IDG_CANCEL, 140, 80, 50, 12
 }
-
-
-//
-// Manifest (High DPI)
-//
-
-#ifndef UNDER_CE
-1 MANIFEST hdpi.manifest
-#endif

@@ -39,8 +39,8 @@ namespace ui {
 enum newline_t { NEWLINE_CRLF, NEWLINE_LF, NEWLINE_CR };
 static const wchar_t *wcCmdBtn[] = {L"Run", L"Next", L"Pause", L"End"},
                      *wcScrKB[] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]", L"@"};
-static HWND hEditor, hInput, hOutput, hMemView, hCmdBtn[sizeof(wcCmdBtn) / sizeof(wcCmdBtn[0])],
-    hScrKB[sizeof(wcScrKB) / sizeof(wcScrKB[0])];
+static HWND hEditor, hInput, hOutput, hMemView, hFocused,
+    hCmdBtn[sizeof(wcCmdBtn) / sizeof(wcCmdBtn[0])], hScrKB[sizeof(wcScrKB) / sizeof(wcScrKB[0])];
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
 static int topPadding = 0, scrX = 480, scrY = 320;
@@ -134,7 +134,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   hInst = _hInst;
 
 #ifdef UNDER_CE
-  wchar_t wcMenu[] = L"MENU";  // CommandBar_InsertMenubarEx requires non-const value
+  wchar_t wcMenu[] = L"menu";  // CommandBar_InsertMenubarEx requires non-const value
   InitCommonControls();
   hCmdBar = CommandBar_Create(hInst, hWnd, 1);
   CommandBar_InsertMenubarEx(hCmdBar, hInst, wcMenu, 0);
@@ -142,7 +142,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   topPadding = CommandBar_Height(hCmdBar);
   hMenu = CommandBar_GetMenu(hCmdBar, 0);
 #else
-  hMenu = LoadMenu(hInst, L"MENU");
+  hMenu = LoadMenu(hInst, L"menu");
   SetMenu(hWnd, hMenu);
 #endif
 
@@ -188,6 +188,8 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
     hScrKB[i] = CreateWindowExW(0, L"BUTTON", wcScrKB[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0,
                                 0, 0, 0, hWnd, (HMENU)(IDC_SCRKBD_FIRST + i), hInst, NULL);
   }
+
+  hFocused = hEditor;
 }
 
 void onDestroy() {
@@ -273,8 +275,6 @@ void onSize() {
   hEditFont = newEditFont;
   InvalidateRect(hWnd, NULL, TRUE);
 }
-
-void onActivate() { SetFocus(hEditor); }
 
 void onInitMenuPopup() {
   // Brainfuck -> Memory type
@@ -377,7 +377,9 @@ void onDropFiles(HDROP hDrop) {
 }
 #endif
 
-void onScreenKeyboard(int _key) { SendMessageW(hEditor, EM_REPLACESEL, 0, (WPARAM)wcScrKB[_key]); }
+void onScreenKeyboard(int _key) {
+  if (hFocused == hEditor) SendMessageW(hEditor, EM_REPLACESEL, 0, (WPARAM)wcScrKB[_key]);
+}
 
 static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
@@ -532,7 +534,36 @@ void setState(enum state_t _state, bool _force) {
   InvalidateRect(hWnd, NULL, FALSE);
 }
 
-void setFocus() { SetFocus(hEditor); }
+void updateFocus(int _id) {
+  switch (_id) {
+    case IDC_EDITOR:
+      hFocused = hEditor;
+      break;
+
+    case IDC_INPUT:
+      hFocused = hInput;
+      break;
+
+    case IDC_OUTPUT:
+      hFocused = hOutput;
+      break;
+
+    case IDC_MEMVIEW:
+      hFocused = hMemView;
+      break;
+
+    default:
+      SetFocus(hFocused);
+  }
+}
+
+void cut() { SendMessageW(hFocused, WM_CUT, 0, 0); }
+
+void copy() { SendMessageW(hFocused, WM_COPY, 0, 0); }
+
+void paste() { SendMessageW(hFocused, WM_PASTE, 0, 0); }
+
+void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
 
 void selProg(unsigned int _progPtr) { SendMessageW(hEditor, EM_SETSEL, _progPtr, _progPtr + 1); }
 
@@ -637,6 +668,8 @@ void switchWordwrap() {
                             0, 0, 0, 0, hWnd, (HMENU)IDC_OUTPUT, hInst, NULL);
   SendMessageW(hOutput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
+  hFocused = hEditor;
+  updateFocus(-1);
   onSize();
   setState(state, true);
 

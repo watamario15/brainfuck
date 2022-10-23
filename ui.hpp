@@ -15,25 +15,19 @@ extern enum Brainfuck::noinput_t noInput;
 extern HWND hWnd;
 extern HINSTANCE hInst;
 
-// WM_CREATE handler.
 void onCreate(HWND _hWnd, HINSTANCE _hInst);
-
-// WM_DESTROY handler.
 void onDestroy();
-
-// WM_SIZE handler.
 void onSize();
-
-// Updates the menu.
 void onInitMenuPopup();
-
-#ifndef UNDER_CE
-// WM_DROPFILES handler.
-void onDropFiles(HDROP hDrop);
-#endif
-
-// Screen keyboard handler.
 void onScreenKeyboard(int _key);
+#ifndef UNDER_CE
+void onDropFiles(HDROP hDrop);
+void onDPIChanged(int _DPI, const RECT *_rect);
+#endif
+void cut();
+void copy();
+void paste();
+void selAll();
 
 // Sets a UI state.
 void setState(enum state_t _state, bool _force = false);
@@ -41,18 +35,6 @@ void setState(enum state_t _state, bool _force = false);
 // Focuses on a recently focused edit control if a non-edit ID is given.
 // Updates internal information if an edit control ID is given.
 void updateFocus(int _id = -1);
-
-// Cut
-void cut();
-
-// Copy
-void copy();
-
-// Paste
-void paste();
-
-// Select All
-void selAll();
 
 // Sets a selection on the editor.
 void selProg(unsigned int _progPtr);
@@ -88,6 +70,9 @@ void switchWordwrap();
 
 // Switches between dark/light theme.
 void switchTheme();
+
+// Opens a font dialog and applies it on editors.
+void chooseFont();
 
 // Checks if there will be data loss. If so, suggests to save.
 // `true` means you can continue a data losing action.

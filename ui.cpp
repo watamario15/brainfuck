@@ -6,13 +6,23 @@
 #endif
 #define NOMINMAX
 #include <windows.h>
+#include <commctrl.h>
 #define mymin(a, b) (((a) < (b)) ? (a) : (b))
-#define adjustX(x) ((x)*scrX / 480)
-#define adjustY(y) ((y)*scrY / 320)
 
 #ifdef UNDER_CE
-#include <commctrl.h>
 #include <commdlg.h>
+#define adjust(coord) (coord)
+#else
+#define adjust(coord) ((coord)*DPI / 96)
+typedef enum MONITOR_DPI_TYPE {
+  MDT_EFFECTIVE_DPI = 0,
+  MDT_ANGULAR_DPI = 1,
+  MDT_RAW_DPI = 2,
+  MDT_DEFAULT = MDT_EFFECTIVE_DPI
+} MONITOR_DPI_TYPE;
+typedef UINT (CALLBACK *GetDpiForWindow_t)(HWND hwnd);
+typedef HRESULT (CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX,
+                                      UINT *dpiY);
 #endif
 
 #ifdef _WIN64
@@ -43,6 +53,7 @@ static HWND hEditor, hInput, hOutput, hMemView, hFocused,
     hCmdBtn[sizeof(wcCmdBtn) / sizeof(wcCmdBtn[0])], hScrKB[sizeof(wcScrKB) / sizeof(wcScrKB[0])];
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
+static LOGFONTW editFont;
 static int topPadding = 0, scrX = 480, scrY = 320;
 static unsigned int memViewStart = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
@@ -51,6 +62,8 @@ static bool withBOM = false, wordwrap = false;
 static enum newline_t newLine = NEWLINE_CRLF;
 #ifdef UNDER_CE
 static HWND hCmdBar;
+#else
+static unsigned int DPI = 96;
 #endif
 
 enum state_t state = STATE_INIT;
@@ -132,10 +145,10 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   size_t i;
   hWnd = _hWnd;
   hInst = _hInst;
+  InitCommonControls();
 
 #ifdef UNDER_CE
   wchar_t wcMenu[] = L"menu";  // CommandBar_InsertMenubarEx requires non-const value
-  InitCommonControls();
   hCmdBar = CommandBar_Create(hInst, hWnd, 1);
   CommandBar_InsertMenubarEx(hCmdBar, hInst, wcMenu, 0);
   CommandBar_Show(hCmdBar, TRUE);
@@ -179,8 +192,10 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
 
   // Command button
   for (i = 0; i < sizeof(hCmdBtn) / sizeof(hCmdBtn[0]); ++i) {
-    hCmdBtn[i] = CreateWindowExW(0, L"BUTTON", wcCmdBtn[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                 0, 0, 0, 0, hWnd, (HMENU)(IDC_CMDBTN_FIRST + i), hInst, NULL);
+    hCmdBtn[i] = CreateWindowExW(
+        0, L"BUTTON", wcCmdBtn[i],
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | (i == 2 || i == 3 ? WS_DISABLED : 0), 0, 0, 0, 0,
+        hWnd, (HMENU)(IDC_CMDBTN_FIRST + i), hInst, NULL);
   }
 
   // Screen keyboard
@@ -190,6 +205,51 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   }
 
   hFocused = hEditor;
+
+  ZeroMemory(&editFont, sizeof(editFont));
+  editFont.lfHeight = 15;
+  editFont.lfCharSet = DEFAULT_CHARSET;
+  editFont.lfQuality = ANTIALIASED_QUALITY;
+#ifdef UNDER_CE
+  lstrcpyW(editFont.lfFaceName, L"Tahoma");
+#else
+  lstrcpyW(editFont.lfFaceName, L"MS Shell Dlg");
+
+  HMODULE dll;
+  HDC hDC;
+  GetDpiForWindow_t getDpiForWindow;
+  GetDpiForMonitor_t getDpiForMonitor;
+
+  // Try GetDpiForWindow (for newer Windows 10 and Windows 11)
+  if (!(dll = LoadLibraryW(L"User32.dll"))) goto dpifallback;  // This is a really odd case
+  if ((getDpiForWindow = (GetDpiForWindow_t)(void *)GetProcAddress(dll, "GetDpiForWindow"))) {
+    DPI = getDpiForWindow(hWnd);
+    FreeLibrary(dll);
+    goto dpidone;
+  }
+  FreeLibrary(dll);
+
+  // Try GetDpiForMonitor (for Windows 8.1 and older Windows 10)
+  if (!(dll = LoadLibraryW(L"Shcore.dll"))) goto dpifallback;
+  if ((getDpiForMonitor = (GetDpiForMonitor_t)(void *)GetProcAddress(dll, "GetDpiForMonitor"))) {
+    unsigned int tmp;
+    getDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &DPI,
+                     &tmp);
+    FreeLibrary(dll);
+    goto dpidone;
+  }
+  FreeLibrary(dll);
+
+dpifallback:
+  // for older Windows
+  hDC = GetDC(hWnd);
+  DPI = GetDeviceCaps(hDC, LOGPIXELSY);
+  ReleaseDC(hWnd, hDC);
+
+dpidone:
+  SetWindowPos(hWnd, NULL, 0, 0, adjust(480), adjust(320),
+               SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
+#endif
 }
 
 void onDestroy() {
@@ -208,38 +268,17 @@ void onSize() {
   scrY = rect.bottom - topPadding;
 
   // Button font
-  rLogfont.lfHeight = mymin(adjustX(16), adjustY(16));
-  rLogfont.lfWidth = 0;
-  rLogfont.lfEscapement = 0;
-  rLogfont.lfOrientation = 0;
-  rLogfont.lfWeight = FW_NORMAL;
-  rLogfont.lfItalic = FALSE;
-  rLogfont.lfUnderline = FALSE;
-  rLogfont.lfStrikeOut = FALSE;
+  ZeroMemory(&rLogfont, sizeof(rLogfont));
+  rLogfont.lfHeight = adjust(15);
+  rLogfont.lfWeight = FW_BOLD;
   rLogfont.lfCharSet = DEFAULT_CHARSET;
-  rLogfont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-  rLogfont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-  rLogfont.lfQuality = DEFAULT_QUALITY;
-  rLogfont.lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
-  lstrcpyW(rLogfont.lfFaceName, L"MS Shell Dlg");
+  rLogfont.lfQuality = ANTIALIASED_QUALITY;
+  lstrcpyW(rLogfont.lfFaceName, editFont.lfFaceName);  // sync with editors
   HFONT newBtnFont = CreateFontIndirectW(&rLogfont);
 
   // Editor/Output font
-  rLogfont.lfHeight = mymin(adjustX(16), adjustY(16));
-  if (rLogfont.lfHeight < 12) rLogfont.lfHeight = 12;  // Lower bound
-  rLogfont.lfWidth = 0;
-  rLogfont.lfEscapement = 0;
-  rLogfont.lfOrientation = 0;
-  rLogfont.lfWeight = FW_NORMAL;
-  rLogfont.lfItalic = FALSE;
-  rLogfont.lfUnderline = FALSE;
-  rLogfont.lfStrikeOut = FALSE;
-  rLogfont.lfCharSet = DEFAULT_CHARSET;
-  rLogfont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-  rLogfont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-  rLogfont.lfQuality = DEFAULT_QUALITY;
-  rLogfont.lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
-  lstrcpyW(rLogfont.lfFaceName, L"MS Shell Dlg");
+  memcpy(&rLogfont, &editFont, sizeof(LOGFONTW));
+  rLogfont.lfHeight = adjust(editFont.lfHeight);
   HFONT newEditFont = CreateFontIndirectW(&rLogfont);
 
   // Move and resize the controls
@@ -248,26 +287,26 @@ void onSize() {
 #endif
   int curX = 0;
   for (i = 0; i < sizeof(hCmdBtn) / sizeof(hCmdBtn[0]); ++i) {
-    MoveWindow(hCmdBtn[i], curX, topPadding, adjustX(48), adjustY(32), TRUE);
-    SendMessageW(hCmdBtn[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(FALSE, 0));
-    curX += adjustX(48);
+    MoveWindow(hCmdBtn[i], curX, topPadding, adjust(46), adjust(32), TRUE);
+    SendMessageW(hCmdBtn[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
+    curX += adjust(46);
   }
   for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
-    MoveWindow(hScrKB[i], curX, topPadding, adjustX(32), adjustY(32), TRUE);
-    SendMessageW(hScrKB[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(FALSE, 0));
-    curX += adjustX(32);
+    MoveWindow(hScrKB[i], curX, topPadding, adjust(30), adjust(32), TRUE);
+    SendMessageW(hScrKB[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
+    curX += adjust(30);
   }
 
-  MoveWindow(hEditor, 0, topPadding + adjustY(32), scrX,
-             scrY - adjustY(32) - adjustY(64) - adjustY(64), TRUE);
-  SendMessageW(hEditor, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(FALSE, 0));
-  MoveWindow(hInput, 0, scrY + topPadding - adjustY(64) - adjustY(64), scrX / 2, adjustY(64), TRUE);
-  SendMessageW(hInput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(FALSE, 0));
-  MoveWindow(hOutput, scrX / 2, scrY + topPadding - adjustY(64) - adjustY(64), scrX - scrX / 2,
-             adjustY(64), TRUE);
-  SendMessageW(hOutput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(FALSE, 0));
-  MoveWindow(hMemView, 0, scrY + topPadding - adjustY(64), scrX, adjustY(64), TRUE);
-  SendMessageW(hMemView, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(FALSE, 0));
+  MoveWindow(hEditor, 0, topPadding + adjust(32), scrX, scrY - adjust(32) - adjust(64) - adjust(64),
+             TRUE);
+  SendMessageW(hEditor, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
+  MoveWindow(hInput, 0, scrY + topPadding - adjust(64) - adjust(64), scrX / 2, adjust(64), TRUE);
+  SendMessageW(hInput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
+  MoveWindow(hOutput, scrX / 2, scrY + topPadding - adjust(64) - adjust(64), scrX - scrX / 2,
+             adjust(64), TRUE);
+  SendMessageW(hOutput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
+  MoveWindow(hMemView, 0, scrY + topPadding - adjust(64), scrX, adjust(64), TRUE);
+  SendMessageW(hMemView, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
 
   if (hBtnFont) DeleteObject(hBtnFont);
   if (hEditFont) DeleteObject(hEditFont);
@@ -368,18 +407,31 @@ void onInitMenuPopup() {
 }
 
 #ifndef UNDER_CE
-// WM_DROPFILES handler.
 void onDropFiles(HDROP hDrop) {
   wchar_t wcFileName[MAX_PATH];
   DragQueryFileW(hDrop, 0, wcFileName, MAX_PATH);
   DragFinish(hDrop);
   openFile(false, wcFileName);
 }
+
+void onDPIChanged(int _DPI, const RECT *_rect) {
+  DPI = _DPI;
+  MoveWindow(hWnd, _rect->left, _rect->top, _rect->right - _rect->left, _rect->bottom - _rect->top,
+             FALSE);
+}
 #endif
 
 void onScreenKeyboard(int _key) {
   if (hFocused == hEditor) SendMessageW(hEditor, EM_REPLACESEL, 0, (WPARAM)wcScrKB[_key]);
 }
+
+void cut() { SendMessageW(hFocused, WM_CUT, 0, 0); }
+
+void copy() { SendMessageW(hFocused, WM_COPY, 0, 0); }
+
+void paste() { SendMessageW(hFocused, WM_PASTE, 0, 0); }
+
+void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
 
 static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
@@ -442,25 +494,31 @@ INT_PTR CALLBACK memViewProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
   switch (uMsg) {
     case WM_INITDIALOG: {
+      RECT wndSize, wndRect, dlgRect;
+      GetWindowRect(hDlg, &dlgRect);
+      GetWindowRect(hWnd, &wndRect);
+      GetClientRect(hWnd, &wndSize);
+      int newPosX = wndRect.left + (wndSize.right - (dlgRect.right - dlgRect.left)) / 2,
+          newPosY = wndRect.top + (wndSize.bottom - (dlgRect.bottom - dlgRect.top)) / 2;
+      if (newPosX < 0) newPosX = 0;
+      if (newPosY < 0) newPosY = 0;
+      SetWindowPos(hDlg, NULL, newPosX, newPosY, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+
       wchar_t editBuf[10];
-      HWND hEdit = GetDlgItem(hDlg, IDG_FROM);
+      HWND hEdit = GetDlgItem(hDlg, 3);
       wsprintfW(editBuf, L"%u", memViewStart <= 999999999 ? memViewStart : 999999999);
-      SendDlgItemMessageW(hDlg, IDG_FROM, EM_SETLIMITTEXT, 9, 0);
-      SetDlgItemTextW(hDlg, IDG_FROM, editBuf);
+      SendDlgItemMessageW(hDlg, 3, EM_SETLIMITTEXT, 9, 0);
+      SetDlgItemTextW(hDlg, 3, editBuf);
       mySetWindowLongW(hEdit, GWL_USERDATA, mySetWindowLongW(hEdit, GWL_WNDPROC, memViewDlgEditor));
       return TRUE;
     }
 
-    case WM_CLOSE:
-      EndDialog(hDlg, IDCANCEL);
-      return TRUE;
-
     case WM_COMMAND:
       switch (LOWORD(wParam)) {
-        case IDG_OK: {
+        case IDOK: {
           wchar_t editBuf[10];
           long temp;
-          GetDlgItemTextW(hDlg, IDG_FROM, (wchar_t *)editBuf, 10);
+          GetDlgItemTextW(hDlg, 3, (wchar_t *)editBuf, 10);
           temp = wcstol(editBuf, NULL, 10);
           if (temp < 0) {
             MessageBoxW(hDlg, L"Invalid input.", L"Error", MB_ICONWARNING);
@@ -471,7 +529,7 @@ INT_PTR CALLBACK memViewProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
           return TRUE;
         }
 
-        case IDG_CANCEL:
+        case IDCANCEL:
           EndDialog(hDlg, IDCANCEL);
           return TRUE;
       }
@@ -556,14 +614,6 @@ void updateFocus(int _id) {
       SetFocus(hFocused);
   }
 }
-
-void cut() { SendMessageW(hFocused, WM_CUT, 0, 0); }
-
-void copy() { SendMessageW(hFocused, WM_COPY, 0, 0); }
-
-void paste() { SendMessageW(hFocused, WM_PASTE, 0, 0); }
-
-void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
 
 void selProg(unsigned int _progPtr) { SendMessageW(hEditor, EM_SETSEL, _progPtr, _progPtr + 1); }
 
@@ -669,7 +719,7 @@ void switchWordwrap() {
   SendMessageW(hOutput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
   hFocused = hEditor;
-  updateFocus(-1);
+  updateFocus();
   onSize();
   setState(state, true);
 
@@ -690,6 +740,20 @@ void switchTheme() {
   InvalidateRect(hInput, NULL, TRUE);
   InvalidateRect(hOutput, NULL, TRUE);
   InvalidateRect(hMemView, NULL, TRUE);
+}
+
+void chooseFont() {
+  CHOOSEFONTW cf;
+  cf.lStructSize = sizeof(CHOOSEFONTW);
+  cf.hwndOwner = hWnd;
+  cf.lpLogFont = &editFont;
+  cf.hDC = GetDC(hWnd);
+  cf.Flags = CF_INITTOLOGFONTSTRUCT | CF_FORCEFONTEXIST | CF_BOTH;
+  if (!ChooseFontW(&cf)) return;
+  ReleaseDC(hWnd, cf.hDC);
+
+  editFont.lfQuality = ANTIALIASED_QUALITY;
+  onSize();
 }
 
 bool promptSave() {

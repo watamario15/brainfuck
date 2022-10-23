@@ -305,10 +305,13 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       ui::onDropFiles((HDROP)wParam);
       break;
 
+    case WM_GETMINMAXINFO:
+      ((MINMAXINFO *)lParam)->ptMinTrackSize.x = 480;
+      ((MINMAXINFO *)lParam)->ptMinTrackSize.y = 320;
+      break;
+
     case 0x2e0:  // WM_DPICHANGED
-      MoveWindow(ui::hWnd, ((PRECT)lParam)->left, ((PRECT)lParam)->top,
-                 ((PRECT)lParam)->right - ((PRECT)lParam)->left,
-                 ((PRECT)lParam)->bottom - ((PRECT)lParam)->top, FALSE);
+      ui::onDPIChanged(HIWORD(wParam), (const RECT *)lParam);
       break;
 #endif
 
@@ -519,12 +522,23 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           ui::switchTheme();
           break;
 
+        case IDM_OPT_FONT:
+          ui::chooseFont();
+          break;
+
         case IDM_OPT_WORDWRAP:
           ui::switchWordwrap();
           break;
 
         case IDM_ABOUT:
-          MessageBoxW(hWnd, APP_NAME L" version " APP_VERSION, L"About this software", 0);
+          MessageBoxW(hWnd,
+            APP_NAME L" version " APP_VERSION L"\r\n"
+            APP_DESCRIPTION L"\r\n\r\n"
+            APP_COPYRIGHT L"\r\n"
+            L"Licensed under the MIT License.",
+            L"About this software",
+            0
+          );
           break;
 
         default:

@@ -1,8 +1,10 @@
 #include <windows.h>
 #include "resource.h"
 
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+
 //
-// Version Information
+// Version information
 //
 
 VS_VERSION_INFO VERSIONINFO
@@ -108,38 +110,51 @@ menu MENU
         MENUITEM "Highlight &program pointer", IDM_OPT_HLTPROG
         MENUITEM "Highlight &memory pointer", IDM_OPT_HLTMEM
         MENUITEM "&Dark theme", IDM_OPT_DARK
+        MENUITEM "&Font...", IDM_OPT_FONT
         MENUITEM "&Word wrap", IDM_OPT_WORDWRAP
     }
     MENUITEM "&About", IDM_ABOUT
 }
 
+
+//
 // Accelerator
+//
 
 accel ACCELERATORS
 {
     "^A", IDM_EDIT_SELALL
 }
 
+
 //
-// Dialog (memory view range)
+// Dialog
 //
 
-memviewopt DIALOG 0, 0, 200, 100
-STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+memviewopt DIALOG 0, 0, 128, 64
 CAPTION "Memory view options"
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+#ifdef UNDER_CE
+EXSTYLE 0x80000000L  // WS_EX_CAPTIONOKBTN
+FONT 9, "Tahoma"
+#else
 FONT 9, "MS Shell Dlg"
+#endif
 {
-   LTEXT "Set a start address of the memory view (0-indexed byte):", 0, 8, 8, 180, 24
-   EDITTEXT  IDG_FROM, 8, 45, 64, 14, ES_NUMBER
-   DEFPUSHBUTTON "&OK", IDG_OK, 80, 80, 50, 12
-   PUSHBUTTON "&Cancel", IDG_CANCEL, 140, 80, 50, 12
+   LTEXT "First address of the memory view (0-indexed byte)", -1, 8, 8, 112, 28, SS_NOPREFIX
+#ifdef UNDER_CE
+   EDITTEXT 3, 32, 40, 64, 14, ES_NUMBER
+#else
+   EDITTEXT 3, 8, 40, 64, 14, ES_NUMBER
+   DEFPUSHBUTTON "&OK", IDOK, 80, 40, 40, 14
+#endif
 }
 
 
 //
-// Manifest (High DPI)
+// Manifest (high DPI)
 //
 
-#ifndef UNDER_CE
+#if !(defined UNDER_CE) && !(defined NOMANIFEST)
 1 MANIFEST hdpi.manifest
 #endif

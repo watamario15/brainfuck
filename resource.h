@@ -19,7 +19,9 @@
 #define IDC_OUTPUT 2
 #define IDC_MEMVIEW 3
 #define IDC_CMDBTN_FIRST 4
+#define CMDBTN_LEN 4
 #define IDC_SCRKBD_FIRST 8
+#define SCRKBD_LEN 9
 
 #define IDM_FILE_NEW 100
 #define IDM_FILE_OPEN 110

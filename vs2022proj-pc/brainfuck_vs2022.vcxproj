@@ -366,7 +366,7 @@
     <Image Include="..\app.ico" />
   </ItemGroup>
   <ItemGroup>
-    <Manifest Include="..\hdpi.manifest" />
+    <Manifest Include="..\app.manifest" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\resource.rc" />

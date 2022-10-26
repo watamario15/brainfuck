@@ -1,30 +1,46 @@
+#include <string>
+
 #ifndef _UNICODE
 #define _UNICODE
 #endif
 #ifndef UNICODE
 #define UNICODE
 #endif
+
+// Since they conflict with the C++ STL and some SDKs don't have them,
+// disables and defines them manually with different names.
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
-#include <commctrl.h>
 #define mymin(a, b) (((a) < (b)) ? (a) : (b))
+#define mymax(a, b) (((a) > (b)) ? (a) : (b))
 
 #ifdef UNDER_CE
+#include <commctrl.h>
 #include <commdlg.h>
-#define adjust(coord) (coord)
+#define adjust(coord) (coord)  // DPI scaling isn't needed for Windows CE.
 #else
-#define adjust(coord) ((coord)*DPI / 96)
+#define adjust(coord) ((coord)*dpi / 96)
+// Since old SDKs don't have this enum, defines it manually.
 typedef enum MONITOR_DPI_TYPE {
   MDT_EFFECTIVE_DPI = 0,
   MDT_ANGULAR_DPI = 1,
   MDT_RAW_DPI = 2,
   MDT_DEFAULT = MDT_EFFECTIVE_DPI
 } MONITOR_DPI_TYPE;
-typedef UINT (CALLBACK *GetDpiForWindow_t)(HWND hwnd);
-typedef HRESULT (CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, UINT *dpiX,
-                                      UINT *dpiY);
+
+// Function pointer type for GetDpiForMonitor API.
+typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType,
+                                              UINT *dpiX, UINT *dpiY);
+
+// Function pointer type for TaskDialog API.
+typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance, PCWSTR pszWindowTitle,
+                                         PCWSTR pszMainInstruction, PCWSTR pszContent,
+                                         int dwCommonButtons, PCWSTR pszIcon, int *pnButton);
 #endif
 
+// Makes SetWindowLongW/GetWindowLongW compatible for both 32-bit and 64-bit system.
 #ifdef _WIN64
 #define mySetWindowLongW(hWnd, index, data) SetWindowLongPtrW(hWnd, index, (LRESULT)(data))
 #define myGetWindowLongW(hWnd, index) GetWindowLongPtrW(hWnd, index)
@@ -39,18 +55,15 @@ typedef HRESULT (CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TY
 #define myGetWindowLongW(hWnd, index) GetWindowLongW(hWnd, index)
 #endif
 
-#include <string>
-
 #include "bf.hpp"
 #include "resource.h"
 #include "ui.hpp"
 
 namespace ui {
 enum newline_t { NEWLINE_CRLF, NEWLINE_LF, NEWLINE_CR };
-static const wchar_t *wcCmdBtn[] = {L"Run", L"Next", L"Pause", L"End"},
-                     *wcScrKB[] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]", L"@"};
-static HWND hEditor, hInput, hOutput, hMemView, hFocused,
-    hCmdBtn[sizeof(wcCmdBtn) / sizeof(wcCmdBtn[0])], hScrKB[sizeof(wcScrKB) / sizeof(wcScrKB[0])];
+static const wchar_t *wcCmdBtn[CMDBTN_LEN] = {L"Run", L"Next", L"Pause", L"End"},
+                     *wcScrKB[SCRKBD_LEN] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]", L"@"};
+static HWND hEditor, hInput, hOutput, hMemView, hFocused, hCmdBtn[CMDBTN_LEN], hScrKB[SCRKBD_LEN];
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
 static LOGFONTW editFont;
@@ -63,7 +76,8 @@ static enum newline_t newLine = NEWLINE_CRLF;
 #ifdef UNDER_CE
 static HWND hCmdBar;
 #else
-static unsigned int DPI = 96;
+static TaskDialog_t taskDialog = NULL;
+static int dpi = 96, sysDPI = 96;
 #endif
 
 enum state_t state = STATE_INIT;
@@ -145,10 +159,10 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   size_t i;
   hWnd = _hWnd;
   hInst = _hInst;
-  InitCommonControls();
 
 #ifdef UNDER_CE
-  wchar_t wcMenu[] = L"menu";  // CommandBar_InsertMenubarEx requires non-const value
+  wchar_t wcMenu[] = L"menu";  // CommandBar_InsertMenubarEx requires non-const value.
+  InitCommonControls();
   hCmdBar = CommandBar_Create(hInst, hWnd, 1);
   CommandBar_InsertMenubarEx(hCmdBar, hInst, wcMenu, 0);
   CommandBar_Show(hCmdBar, TRUE);
@@ -191,7 +205,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   SendMessageW(hMemView, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
   // Command button
-  for (i = 0; i < sizeof(hCmdBtn) / sizeof(hCmdBtn[0]); ++i) {
+  for (i = 0; i < CMDBTN_LEN; ++i) {
     hCmdBtn[i] = CreateWindowExW(
         0, L"BUTTON", wcCmdBtn[i],
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | (i == 2 || i == 3 ? WS_DISABLED : 0), 0, 0, 0, 0,
@@ -199,56 +213,74 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   }
 
   // Screen keyboard
-  for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+  for (i = 0; i < SCRKBD_LEN; ++i) {
     hScrKB[i] = CreateWindowExW(0, L"BUTTON", wcScrKB[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0,
                                 0, 0, 0, hWnd, (HMENU)(IDC_SCRKBD_FIRST + i), hInst, NULL);
   }
 
   hFocused = hEditor;
 
+  // Default configurations for the editor font.
+  // We create the actual font object on onSize function.
   ZeroMemory(&editFont, sizeof(editFont));
-  editFont.lfHeight = 15;
   editFont.lfCharSet = DEFAULT_CHARSET;
   editFont.lfQuality = ANTIALIASED_QUALITY;
+  editFont.lfHeight = -15;  // Represents font size 11 in 96 DPI.
 #ifdef UNDER_CE
+  // Sets a pre-installed font on Windows CE, as it doesn't have "MS Shell Dlg".
   lstrcpyW(editFont.lfFaceName, L"Tahoma");
 #else
+  // Sets a logical font face name for localization.
+  // It maps to a default shell font associated with the current culture/locale.
   lstrcpyW(editFont.lfFaceName, L"MS Shell Dlg");
 
-  HMODULE dll;
-  HDC hDC;
-  GetDpiForWindow_t getDpiForWindow;
-  GetDpiForMonitor_t getDpiForMonitor;
-
-  // Try GetDpiForWindow (for newer Windows 10 and Windows 11)
-  if (!(dll = LoadLibraryW(L"User32.dll"))) goto dpifallback;  // This is a really odd case
-  if ((getDpiForWindow = (GetDpiForWindow_t)(void *)GetProcAddress(dll, "GetDpiForWindow"))) {
-    DPI = getDpiForWindow(hWnd);
-    FreeLibrary(dll);
-    goto dpidone;
-  }
-  FreeLibrary(dll);
-
-  // Try GetDpiForMonitor (for Windows 8.1 and older Windows 10)
-  if (!(dll = LoadLibraryW(L"Shcore.dll"))) goto dpifallback;
-  if ((getDpiForMonitor = (GetDpiForMonitor_t)(void *)GetProcAddress(dll, "GetDpiForMonitor"))) {
-    unsigned int tmp;
-    getDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &DPI,
-                     &tmp);
-    FreeLibrary(dll);
-    goto dpidone;
-  }
-  FreeLibrary(dll);
-
-dpifallback:
-  // for older Windows
-  hDC = GetDC(hWnd);
-  DPI = GetDeviceCaps(hDC, LOGPIXELSY);
+  // Obtains the "system DPI" value. We use this as the fallback value on older Windows versions
+  // and to calculate the appropriate font height value for ChooseFontW.
+  HDC hDC = GetDC(hWnd);
+  sysDPI = GetDeviceCaps(hDC, LOGPIXELSX);
   ReleaseDC(hWnd, hDC);
 
-dpidone:
+  // Tries to load the GetDpiForMonitor API. Use of the full path improves security. We avoid a
+  // direct call to keep this program compatible with Windows 7 and earlier.
+  //
+  // Microsoft recommends the use of GetDpiForWindow API instead of this API according to their
+  // documentation. However, it requires Windows 10 1607 or later, which makes this compatibility
+  // keeping code more complicated, and GetDpiForMonitor API still works for programs that only use
+  // the process-wide DPI awareness. Here, as we only use the process-wide DPI awareness, we are
+  // going to use GetDpiForMonitor API.
+  //
+  // References:
+  // https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-getdpiformonitor
+  // https://mariusbancila.ro/blog/2021/05/19/how-to-build-high-dpi-aware-native-desktop-applications/
+  GetDpiForMonitor_t getDpiForMonitor = NULL;
+  HMODULE dll = LoadLibraryW(L"C:\\Windows\\System32\\Shcore.dll");
+  if (dll) {
+    getDpiForMonitor = (GetDpiForMonitor_t)(void *)GetProcAddress(dll, "GetDpiForMonitor");
+  }
+
+  // Tests whether it successfully got the GetDpiForMonitor API.
+  if (getDpiForMonitor) {  // It got (the system is presumably Windows 8.1 or later).
+    unsigned int tmpX, tmpY;
+    getDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &tmpX,
+                     &tmpY);
+    dpi = tmpX;
+  } else {  // It failed (the system is presumably older than Windows 8.1).
+    dpi = sysDPI;
+  }
+  if (dll) FreeLibrary(dll);
+
+  // Adjusts the windows size according to the DPI value.
   SetWindowPos(hWnd, NULL, 0, 0, adjust(480), adjust(320),
                SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
+
+  // Tries to load the TaskDialog API which is a newer substitite of MessageBoxW.
+  // This API is per monitor DPI aware but doesn't exist before Windows Vista.
+  // To make the system select version 6 comctl32.dll, we don't use the full path here.
+  dll = NULL;
+  dll = LoadLibraryW(L"comctl32.dll");
+  if (dll) {
+    taskDialog = (TaskDialog_t)(void *)GetProcAddress(dll, "TaskDialog");
+  }
 #endif
 }
 
@@ -260,20 +292,31 @@ void onDestroy() {
 }
 
 void onSize() {
+  RECT rect;
+
+#ifdef UNDER_CE
+  // Manually forces the minimum window size as Windows CE doesn't support WM_GETMINMAXINFO.
+  // Seemingly, Windows CE doesn't re-send WM_SIZE on SetWindowPos calls inside a WM_SIZE handler.
+  GetWindowRect(hWnd, &rect);
+  if (rect.right - rect.left < 480 || rect.bottom - rect.top < 320) {
+    SetWindowPos(hWnd, NULL, 0, 0, mymax(480, rect.right - rect.left),
+                 mymax(320, rect.bottom - rect.top), SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
+  }
+#endif
+
   size_t i;
   LOGFONTW rLogfont;
-  RECT rect;
   GetClientRect(hWnd, &rect);
   scrX = rect.right;
   scrY = rect.bottom - topPadding;
 
   // Button font
   ZeroMemory(&rLogfont, sizeof(rLogfont));
-  rLogfont.lfHeight = adjust(15);
+  rLogfont.lfHeight = adjust(-15);
   rLogfont.lfWeight = FW_BOLD;
   rLogfont.lfCharSet = DEFAULT_CHARSET;
   rLogfont.lfQuality = ANTIALIASED_QUALITY;
-  lstrcpyW(rLogfont.lfFaceName, editFont.lfFaceName);  // sync with editors
+  lstrcpyW(rLogfont.lfFaceName, editFont.lfFaceName);  // Syncs with editors.
   HFONT newBtnFont = CreateFontIndirectW(&rLogfont);
 
   // Editor/Output font
@@ -281,22 +324,23 @@ void onSize() {
   rLogfont.lfHeight = adjust(editFont.lfHeight);
   HFONT newEditFont = CreateFontIndirectW(&rLogfont);
 
-  // Move and resize the controls
 #ifdef UNDER_CE
+  // We must "move" the command bar to prevent a glitch.
   MoveWindow(hCmdBar, 0, 0, 0, 0, TRUE);
 #endif
+
+  // Moves and resizes controls, and applies the newly created fonts for them.
   int curX = 0;
-  for (i = 0; i < sizeof(hCmdBtn) / sizeof(hCmdBtn[0]); ++i) {
+  for (i = 0; i < CMDBTN_LEN; ++i) {
     MoveWindow(hCmdBtn[i], curX, topPadding, adjust(46), adjust(32), TRUE);
     SendMessageW(hCmdBtn[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
     curX += adjust(46);
   }
-  for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+  for (i = 0; i < SCRKBD_LEN; ++i) {
     MoveWindow(hScrKB[i], curX, topPadding, adjust(30), adjust(32), TRUE);
     SendMessageW(hScrKB[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
     curX += adjust(30);
   }
-
   MoveWindow(hEditor, 0, topPadding + adjust(32), scrX, scrY - adjust(32) - adjust(64) - adjust(64),
              TRUE);
   SendMessageW(hEditor, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
@@ -312,7 +356,7 @@ void onSize() {
   if (hEditFont) DeleteObject(hEditFont);
   hBtnFont = newBtnFont;
   hEditFont = newEditFont;
-  InvalidateRect(hWnd, NULL, TRUE);
+  InvalidateRect(hWnd, NULL, FALSE);
 }
 
 void onInitMenuPopup() {
@@ -414,8 +458,13 @@ void onDropFiles(HDROP hDrop) {
   openFile(false, wcFileName);
 }
 
-void onDPIChanged(int _DPI, const RECT *_rect) {
-  DPI = _DPI;
+void onGetMinMaxInfo(MINMAXINFO *_minMaxInfo) {
+  _minMaxInfo->ptMinTrackSize.x = adjust(480);
+  _minMaxInfo->ptMinTrackSize.y = adjust(320);
+}
+
+void onDPIChanged(int _dpi, const RECT *_rect) {
+  dpi = _dpi;
   MoveWindow(hWnd, _rect->left, _rect->top, _rect->right - _rect->left, _rect->bottom - _rect->top,
              FALSE);
 }
@@ -433,6 +482,37 @@ void paste() { SendMessageW(hFocused, WM_PASTE, 0, 0); }
 
 void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
 
+int messageBox(HWND _hWnd, const wchar_t *_lpText, const wchar_t *_lpCaption, unsigned int _uType) {
+#ifdef UNDER_CE
+  return MessageBoxW(_hWnd, _lpText, _lpCaption, _uType);
+#else
+  if (taskDialog) {
+    int buttons = (_uType & 0xF) == MB_OK ? 1 : 14, result;
+    wchar_t *icon;
+    switch (_uType & 0xF0) {
+      case 0:
+        icon = NULL;
+        break;
+      case MB_ICONWARNING:
+        icon = MAKEINTRESOURCEW(-1);
+        break;
+      case MB_ICONERROR:
+        icon = MAKEINTRESOURCEW(-2);
+        break;
+      default:
+        icon = MAKEINTRESOURCEW(-3);
+    }
+    taskDialog(_hWnd, hInst, _lpCaption, L"", _lpText, buttons, icon, &result);
+    return result;
+  } else {
+    return MessageBoxW(_hWnd, _lpText, _lpCaption, _uType);
+  }
+#endif
+}
+
+// Hook window procedure for the edit control in the memory view options dialog.
+// This procedure translates top row character keys to numbers according to the keyboard layout of
+// SHARP Brain.
 static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
 
@@ -489,11 +569,13 @@ static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, UINT uMsg, WPARAM wParam, LP
   return CallWindowProcW(prevWndProc, hWnd, uMsg, wParam, lParam);
 }
 
+// Window procedure for the memory view options dialog.
 INT_PTR CALLBACK memViewProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   UNREFERENCED_PARAMETER(lParam);
 
   switch (uMsg) {
     case WM_INITDIALOG: {
+      // Puts the dialog at the center of the parent window.
       RECT wndSize, wndRect, dlgRect;
       GetWindowRect(hDlg, &dlgRect);
       GetWindowRect(hWnd, &wndRect);
@@ -521,7 +603,7 @@ INT_PTR CALLBACK memViewProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
           GetDlgItemTextW(hDlg, 3, (wchar_t *)editBuf, 10);
           temp = wcstol(editBuf, NULL, 10);
           if (temp < 0) {
-            MessageBoxW(hDlg, L"Invalid input.", L"Error", MB_ICONWARNING);
+            messageBox(hDlg, L"Invalid input.", L"Error", MB_ICONWARNING);
           } else {
             memViewStart = temp;
             EndDialog(hDlg, IDOK);
@@ -550,7 +632,7 @@ void setState(enum state_t _state, bool _force) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)FALSE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)FALSE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], TRUE);
     }
   } else if (_state == STATE_RUN) {
@@ -561,7 +643,7 @@ void setState(enum state_t _state, bool _force) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], FALSE);
     }
   } else if (_state == STATE_PAUSE) {
@@ -572,7 +654,7 @@ void setState(enum state_t _state, bool _force) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], FALSE);
     }
   } else if (_state == STATE_FINISH) {
@@ -583,7 +665,7 @@ void setState(enum state_t _state, bool _force) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], FALSE);
     }
   }
@@ -630,6 +712,7 @@ void setMemory(const std::vector<unsigned char> *memory) {
   unsigned int i;
   std::wstring wstrOut;
   for (i = memViewStart; i < memViewStart + 100 && i < memory->size(); ++i) {
+    // Converts to a hexadecimal string.
     wchar_t wcOut[] = {0, 0, L' ', 0};
     unsigned char high = memory->at(i) >> 4, low = memory->at(i) & 0xF;
     if (high < 10) {
@@ -664,8 +747,6 @@ wchar_t *getInput() {
 
   return retInBuf;
 }
-
-void clearOutput() { SetWindowTextW(hOutput, L""); }
 
 void setOutput(const wchar_t *_str) { SetWindowTextW(hOutput, _str); }
 
@@ -736,31 +817,55 @@ void switchWordwrap() {
 void switchTheme() {
   dark = !dark;
 
-  InvalidateRect(hEditor, NULL, TRUE);
-  InvalidateRect(hInput, NULL, TRUE);
-  InvalidateRect(hOutput, NULL, TRUE);
-  InvalidateRect(hMemView, NULL, TRUE);
+  InvalidateRect(hEditor, NULL, FALSE);
+  InvalidateRect(hInput, NULL, FALSE);
+  InvalidateRect(hOutput, NULL, FALSE);
+  InvalidateRect(hMemView, NULL, FALSE);
 }
 
 void chooseFont() {
+#ifndef UNDER_CE
+  LONG origHeight = editFont.lfHeight;
+  // Temporarilly sets to the "System DPI scaled" value since ChooseFontW expects it.
+  // Subtracting by 96 - 1 makes this division to behave like a ceiling function.
+  // Note that editFont.lfHeight is negative.
+  editFont.lfHeight = (editFont.lfHeight * sysDPI - (96 - 1)) / 96;
+#endif
+
   CHOOSEFONTW cf;
   cf.lStructSize = sizeof(CHOOSEFONTW);
   cf.hwndOwner = hWnd;
   cf.lpLogFont = &editFont;
-  cf.hDC = GetDC(hWnd);
+  cf.hDC = GetDC(hWnd);  // Required for CF_BOTH.
+  // We won't get any fonts if we omit CF_BOTH on Windows CE.
   cf.Flags = CF_INITTOLOGFONTSTRUCT | CF_FORCEFONTEXIST | CF_BOTH;
-  if (!ChooseFontW(&cf)) return;
+  BOOL ret = ChooseFontW(&cf);
   ReleaseDC(hWnd, cf.hDC);
 
-  editFont.lfQuality = ANTIALIASED_QUALITY;
-  onSize();
+#ifdef UNDER_CE
+  if (ret) {
+    editFont.lfQuality = ANTIALIASED_QUALITY;
+    onSize();
+  }
+#else
+  if (ret) {
+    // Re-converts to the 96 DPI value as we properly adjust it on the fly.
+    editFont.lfHeight = (editFont.lfHeight * 96 - (sysDPI - 1)) / sysDPI;
+    editFont.lfQuality = ANTIALIASED_QUALITY;
+    onSize();
+  } else {
+    // Rewrites the original value instead of re-converting.
+    // Re-converting can results in a different value.
+    editFont.lfHeight = origHeight;
+  }
+#endif
 }
 
 bool promptSave() {
   if (SendMessageW(hEditor, EM_GETMODIFY, 0, 0) == 0) return true;
 
-  int ret = MessageBoxW(hWnd, L"Unsaved data will be lost. Save changes?", L"Confirm",
-                        MB_ICONWARNING | MB_YESNOCANCEL);
+  int ret = messageBox(hWnd, L"Unsaved data will be lost. Save changes?", L"Confirm",
+                       MB_ICONWARNING | MB_YESNOCANCEL);
 
   if (ret == IDCANCEL) {
     return false;
@@ -774,7 +879,7 @@ bool promptSave() {
     return true;
   }
 
-  // shouldn't be reached
+  // Shouldn't be reached.
   return true;
 }
 
@@ -815,7 +920,7 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   HANDLE hFile = CreateFileW(_fileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                              FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
-    MessageBoxW(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
     return;
   }
 
@@ -823,16 +928,17 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   char *fileBuf = new char[fileSize];
   int padding = 0;
   ReadFile(hFile, fileBuf, fileSize, &readLen, NULL);
-  if (fileBuf[0] == '\xEF' && fileBuf[1] == '\xBB' && fileBuf[2] == '\xBF') padding = 3;
+  CloseHandle(hFile);
+  if (fileBuf[0] == '\xEF' && fileBuf[1] == '\xBB' && fileBuf[2] == '\xBF') padding = 3;  // BOM
   int length = MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, NULL, 0);
   if (length >= 0x7FFFFFFE) {
-    MessageBoxW(hWnd, L"This file is too large.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"This file is too large.", L"Error", MB_ICONWARNING);
     delete[] fileBuf;
-    CloseHandle(hFile);
     return;
   }
   wchar_t *wcFileBuf = new wchar_t[length + 1]();
   MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, wcFileBuf, length);
+  delete[] fileBuf;
 
   std::wstring converted = wcFileBuf;
   delete[] wcFileBuf;
@@ -842,9 +948,6 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
   wstrFileName = _fileName;
   withBOM = padding != 0;
-
-  CloseHandle(hFile);
-  delete[] fileBuf;
 
   std::wstring title = L"[";
   title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1) + L"] - " APP_NAME);
@@ -889,19 +992,18 @@ bool saveFile(bool _isOverwrite) {
   HANDLE hFile = CreateFileW(wcFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
                              FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
-    MessageBoxW(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
     return false;
   }
 
   DWORD dwTemp;
-  if (withBOM) WriteFile(hFile, "\xEF\xBB\xBF", 3, &dwTemp, NULL);
+  if (withBOM) WriteFile(hFile, "\xEF\xBB\xBF", 3, &dwTemp, NULL);  // BOM
   WriteFile(hFile, szEditor, length - 1, &dwTemp, NULL);
+  CloseHandle(hFile);
+  delete[] szEditor;
 
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
   wstrFileName = wcFileName;
-
-  CloseHandle(hFile);
-  delete[] szEditor;
 
   std::wstring title = L"[";
   title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1) + L"] - " APP_NAME);

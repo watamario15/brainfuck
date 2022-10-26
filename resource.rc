@@ -131,18 +131,19 @@ accel ACCELERATORS
 // Dialog
 //
 
-memviewopt DIALOG 0, 0, 128, 64
-CAPTION "Memory view options"
-STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 #ifdef UNDER_CE
+memviewopt DIALOG 0, 0, 128, 64
 EXSTYLE 0x80000000L  // WS_EX_CAPTIONOKBTN
 FONT 9, "Tahoma"
 #else
-FONT 9, "MS Shell Dlg"
+memviewopt DIALOGEX 0, 0, 128, 64
+FONT 9, "MS Shell Dlg 2"
 #endif
+CAPTION "Memory view options"
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 {
    LTEXT "First address of the memory view (0-indexed byte)", -1, 8, 8, 112, 28, SS_NOPREFIX
-#ifdef UNDER_CE
+#ifdef UNDER_CE  // It already has an OK button on the title bar.
    EDITTEXT 3, 32, 40, 64, 14, ES_NUMBER
 #else
    EDITTEXT 3, 8, 40, 64, 14, ES_NUMBER
@@ -152,9 +153,9 @@ FONT 9, "MS Shell Dlg"
 
 
 //
-// Manifest (high DPI)
+// Manifest for PC platforms (high DPI and common controls version 6)
 //
 
 #if !(defined UNDER_CE) && !(defined NOMANIFEST)
-1 MANIFEST hdpi.manifest
+1 MANIFEST app.manifest
 #endif

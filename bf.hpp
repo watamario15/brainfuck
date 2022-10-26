@@ -1,5 +1,5 @@
 // This module assumes `unsigned char` to be an 8-bit integer (uint8_t).
-// I avoid the use of uint8_t as eVC4 doesn't have stdint.h.
+// We avoid the use of uint8_t as eVC4 doesn't have stdint.h.
 
 #ifndef BF_HPP_
 #define BF_HPP_

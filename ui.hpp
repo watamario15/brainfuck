@@ -22,12 +22,17 @@ void onInitMenuPopup();
 void onScreenKeyboard(int _key);
 #ifndef UNDER_CE
 void onDropFiles(HDROP hDrop);
+void onGetMinMaxInfo(MINMAXINFO *_minMaxInfo);
 void onDPIChanged(int _DPI, const RECT *_rect);
 #endif
 void cut();
 void copy();
 void paste();
 void selAll();
+
+// Shows a message box. Uses TaskDialog if available, and if not, falls back to MessageBoxW.
+// Supports only MB_OK, MB_YESNOCANCEL, MB_ICONWARNING, MB_ICONINFORMATION, and MB_ICONERROR.
+int messageBox(HWND _hWnd, const wchar_t *_lpText, const wchar_t *_lpCaption, unsigned int _uType);
 
 // Sets a UI state.
 void setState(enum state_t _state, bool _force = false);
@@ -52,9 +57,6 @@ wchar_t *getEditor();
 // Retrieves the input content to the returned buffer.
 // Previously returned pointer gets invalidated on each call.
 wchar_t *getInput();
-
-// Clears the output box.
-void clearOutput();
 
 // Sets an null-terminated string to the output box.
 void setOutput(const wchar_t *_str);

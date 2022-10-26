@@ -65,7 +65,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /subsystem:windowsce,6.00"
-				AdditionalDependencies="mmtimer.lib"
+				AdditionalDependencies="commdlg.lib mmtimer.lib"
 				OutputFile="$(OutDir)/AppMain_.exe"
 				LinkIncremental="2"
 				DelayLoadDLLs="$(NOINHERIT)"
@@ -153,7 +153,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalOptions=" /subsystem:windowsce,6.00"
-				AdditionalDependencies="mmtimer.lib"
+				AdditionalDependencies="commdlg.lib mmtimer.lib"
 				OutputFile="$(OutDir)/AppMain_.exe"
 				LinkIncremental="1"
 				DelayLoadDLLs="$(NOINHERIT)"

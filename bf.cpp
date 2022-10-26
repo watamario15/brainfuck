@@ -83,7 +83,7 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
       }
       break;
 
-    // Wrap around is guaranteed for unsigned integer.
+    // Wrap around is guaranteed for an unsigned integer.
     case L'+':
       if (wrapInt) {
         ++memory[memIndex];
@@ -108,7 +108,7 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
       }
       break;
 
-    // Wrap around is guaranteed for unsigned integer.
+    // Wrap around is guaranteed for an unsigned integer.
     case L'-':
       if (wrapInt) {
         --memory[memIndex];
@@ -201,7 +201,7 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
       }
       break;
 
-    // Extended spec for debugging (breakpoint)
+    // Extended spec for debugging (breakpoint).
     case L'@':
       if (debug) result = RESULT_BREAK;
       break;

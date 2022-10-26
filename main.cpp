@@ -1,10 +1,16 @@
+#include <stdexcept>
+#include <vector>
+
 #ifndef _UNICODE
 #define _UNICODE
 #endif
 #ifndef UNICODE
 #define UNICODE
 #endif
+
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #ifndef WS_OVERLAPPEDWINDOW
 #define WS_OVERLAPPEDWINDOW \
@@ -12,6 +18,7 @@
 #endif
 
 #ifdef UNDER_CE
+// Workaround for wrong macro definitions of CeGCC.
 #if SW_MAXIMIZE != 12
 #undef SW_MAXIMIZE
 #define SW_MAXIMIZE 12
@@ -28,24 +35,32 @@
 #undef WS_MAXIMIZEBOX
 #define WS_MAXIMIZEBOX 0x00020000L
 #endif
+
+// WinMain is already unicode on Windows CE.
 #define wWinMain WinMain
+
+// Expands to _beginthreadex on Windows PC and CreateThread on Windows CE.
 #define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
   CreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
-typedef DWORD tret_t;  // Return type for thread functions
+
+// Return type for thread functions.
+typedef DWORD tret_t;
+
 #include <commctrl.h>
 #include <commdlg.h>
 #else
 #include <process.h>
+
+// Expands to _beginthreadex on Windows PC and CreateThread on Windows CE.
 #define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
   (HANDLE) _beginthreadex(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
-typedef unsigned int tret_t;  // Return type for thread functions
+
+// Return type for thread functions
+typedef unsigned int tret_t;
 #endif
 
 #define WND_CLASS_NAME L"brainfuck-main"
 #define WM_APP_THREADEND WM_APP
-
-#include <stdexcept>
-#include <vector>
 
 #include "bf.hpp"
 #include "resource.h"
@@ -66,29 +81,31 @@ static inline bool isHex(wchar_t chr) {
          (chr >= L'a' && chr <= L'f');
 }
 
-// Initializes the Brainfuck module.
+// Initializes the Brainfuck module. Returns false on an invalid hexadecimal input.
 static bool bfInit() {
   static std::vector<unsigned char> vecIn;
   static unsigned char *input = NULL;
 
-  ui::clearOutput();
+  ui::setOutput(L"");
   ui::setMemory(NULL);
   g_outBuf.clear();
   g_prevCR = false;
   int inLen;
   wchar_t *wcInput = ui::getInput();
+  // We shouldn't delete when vecIn isn't empty, as it means input is allocated by vecIn.
   if (input && vecIn.empty()) delete[] input;
   input = NULL;
   vecIn.clear();
 
   if (ui::inCharSet == IDM_BF_INPUT_HEX) {
+    // Converts the hexadecimal input.
     wchar_t hex[2];
     int hexLen = 0;
     size_t i;
     for (i = 0; true; ++i) {
       if (isHex(wcInput[i])) {
-        if (hexLen >= 2) return false;  // invalid hexadecimal input
-        if (wcInput[i] > L'Z') {        // align to upper case
+        if (hexLen >= 2) return false;  // Exceeding the 8-bit range.
+        if (wcInput[i] > L'Z') {        // Aligns to the upper case.
           hex[hexLen++] = wcInput[i] - (L'a' - L'A');
         } else {
           hex[hexLen++] = wcInput[i];
@@ -115,7 +132,7 @@ static bool bfInit() {
           hexLen = 0;
         }
       } else {
-        return false;  // invalid hexadecimal input
+        return false;  // Invalid hexadecimal input.
       }
 
       if (wcInput[i] == L'\0') break;
@@ -154,7 +171,7 @@ static enum Brainfuck::result_t bfNext() {
     int exLen = MultiByteToWideChar(CP_UTF8, 0, ex.what(), -1, (wchar_t *)NULL, 0);
     wchar_t *wcException = new wchar_t[exLen];
     MultiByteToWideChar(CP_UTF8, 0, ex.what(), -1, wcException, exLen);
-    MessageBoxW(ui::hWnd, wcException, L"Error", MB_ICONWARNING);
+    ui::messageBox(ui::hWnd, wcException, L"Error", MB_ICONWARNING);
     delete[] wcException;
     result = Brainfuck::RESULT_FIN;
   }
@@ -176,11 +193,13 @@ static enum Brainfuck::result_t bfNext() {
       if (ui::outCharSet == IDM_BF_OUTPUT_ASCII) {
         wchar_t wcOut[] = {0, 0};
         MultiByteToWideChar(CP_UTF8, 0, (char *)&output, 1, wcOut, 1);
+        // Align newlines to CRLF.
         if (g_prevCR && wcOut[0] != L'\n') ui::appendOutput(L"\n");
         if (!g_prevCR && wcOut[0] == L'\n') ui::appendOutput(L"\r");
-        ui::appendOutput(wcOut);
         g_prevCR = wcOut[0] == L'\r';
+        ui::appendOutput(wcOut);
       } else if (ui::outCharSet == IDM_BF_OUTPUT_HEX) {
+        // Converts the output to a hexadecimal string.
         wchar_t wcOut[] = {0, 0, L' ', 0};
         unsigned char high = output >> 4, low = output & 0xF;
         if (high < 10) {
@@ -195,6 +214,7 @@ static enum Brainfuck::result_t bfNext() {
         }
         ui::appendOutput(wcOut);
       } else {
+        // Align newlines to CRLF.
         if (g_prevCR && output != '\n') g_outBuf.push_back('\n');
         if (!g_prevCR && output == '\n') g_outBuf.push_back('\r');
         g_outBuf.push_back(output);
@@ -216,8 +236,8 @@ tret_t WINAPI threadRunner(LPVOID lpParameter) {
       g_timerID = timeSetEvent(ui::speed, ui::speed, (LPTIMECALLBACK)hEvent, 0,
                                TIME_PERIODIC | TIME_CALLBACK_EVENT_SET);
     }
-    if (g_timerID == 0) {
-      MessageBoxW(ui::hWnd, L"This speed is not supported on your device. Try slowing down.",
+    if (!g_timerID) {
+      ui::messageBox(ui::hWnd, L"This speed is not supported on your device. Try slowing down.",
                   L"Error", MB_ICONERROR);
       ui::setState(ui::STATE_INIT);
       PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
@@ -235,16 +255,16 @@ tret_t WINAPI threadRunner(LPVOID lpParameter) {
     }
   }
 
-  if (ui::speed != 0) {
+  if (g_timerID) {
     timeKillEvent(g_timerID);
     timeEndPeriod(ui::speed);
     CloseHandle(hEvent);
     g_timerID = 0;
   }
-  if (g_ctrlThread == CTRLTHREAD_END) {
+  if (g_ctrlThread == CTRLTHREAD_END) {  // Terminated
     g_bf->reset();
-  } else {
-    if (g_ctrlThread == CTRLTHREAD_RUN) {
+  } else {                                 // Paused, finished, or error
+    if (g_ctrlThread == CTRLTHREAD_RUN) {  // Finished or error
       ui::setState(result == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
     }
     ui::setMemory(&g_bf->getMemory());
@@ -279,7 +299,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
 
     case WM_ACTIVATE:
-      if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) ui::updateFocus(-1);
+      if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) ui::updateFocus();
       break;
 
     case WM_CTLCOLOREDIT:
@@ -306,8 +326,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
 
     case WM_GETMINMAXINFO:
-      ((MINMAXINFO *)lParam)->ptMinTrackSize.x = 480;
-      ((MINMAXINFO *)lParam)->ptMinTrackSize.y = 320;
+      ui::onGetMinMaxInfo((MINMAXINFO *)lParam);
       break;
 
     case 0x2e0:  // WM_DPICHANGED
@@ -335,11 +354,12 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
     case WM_COMMAND:
       ui::updateFocus(LOWORD(wParam));
+
       switch (LOWORD(wParam)) {
         case IDC_CMDBTN_FIRST:  // Run
           if (!didInit) {
             if (!bfInit()) {
-              MessageBoxW(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
+              ui::messageBox(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
               break;
             }
             didInit = true;
@@ -349,7 +369,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           if (g_hThread) {
             SetThreadPriority(g_hThread, THREAD_PRIORITY_BELOW_NORMAL);
           } else {
-            MessageBoxW(hWnd, L"Failed to create a runner thread.", L"Error", MB_ICONERROR);
+            ui::messageBox(hWnd, L"Failed to create a runner thread.", L"Error", MB_ICONERROR);
             break;
           }
 
@@ -360,7 +380,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case IDC_CMDBTN_FIRST + 1:  // Next
           if (!didInit) {
             if (!bfInit()) {
-              MessageBoxW(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
+              ui::messageBox(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
               break;
             }
             didInit = true;
@@ -531,7 +551,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         case IDM_ABOUT:
-          MessageBoxW(hWnd,
+          ui::messageBox(hWnd,
             APP_NAME L" version " APP_VERSION L"\r\n"
             APP_DESCRIPTION L"\r\n\r\n"
             APP_COPYRIGHT L"\r\n"
@@ -542,7 +562,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         default:
-          if (LOWORD(wParam) >= IDC_SCRKBD_FIRST && LOWORD(wParam) <= IDC_SCRKBD_FIRST + 8) {
+          if (LOWORD(wParam) >= IDC_SCRKBD_FIRST && LOWORD(wParam) < IDC_SCRKBD_FIRST + SCRKBD_LEN) {
             ui::onScreenKeyboard(LOWORD(wParam) - IDC_SCRKBD_FIRST);
           }
       }
@@ -559,6 +579,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
   size_t i;
   UNREFERENCED_PARAMETER(hPrevInstance);
 
+  // Replaces slashes with backslashes.
   for (i = 0; lpCmdLine[i]; ++i) {
     if (lpCmdLine[i] == L'/') lpCmdLine[i] = L'\\';
   }
@@ -579,7 +600,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
   wcl.lpszMenuName = NULL;
   wcl.cbClsExtra = 0;
   wcl.cbWndExtra = 0;
-  wcl.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
+  wcl.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);  // This is the button face color weirdly.
   if (!RegisterClassW(&wcl)) return FALSE;
 
   HWND hWnd = CreateWindowExW(0, WND_CLASS_NAME, APP_NAME, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
@@ -588,7 +609,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 
   ShowWindow(hWnd, nShowCmd);
 #ifdef UNDER_CE
-  ShowWindow(hWnd, SW_MAXIMIZE);
+  ShowWindow(hWnd, SW_MAXIMIZE);  // Maximizes as most Windows CE devices have a small display.
 #else
   DragAcceptFiles(hWnd, TRUE);
 #endif

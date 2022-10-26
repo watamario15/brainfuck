@@ -13,4 +13,4 @@ Default settings are shown in **bold** typeface. For I/O charset, UTF-8 is defau
 |Integer overflow|**wrap around**, error|
 |Debugging|Break on `@` (disabled by default)|
 
-"error" options are useful for debuggings and portability checks.
+"error" options are useful for debugging and portability check.

@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 9.00
+# Visual Studio 2005
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "brainfuck_vs2005", "brainfuck_vs2005.vcproj", "{59076049-2442-4DA3-8462-460703B07356}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Toradex_CE600 (ARMv4I) = Debug|Toradex_CE600 (ARMv4I)
+		Release|Toradex_CE600 (ARMv4I) = Release|Toradex_CE600 (ARMv4I)
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{59076049-2442-4DA3-8462-460703B07356}.Debug|Toradex_CE600 (ARMv4I).ActiveCfg = Debug|Toradex_CE600 (ARMv4I)
+		{59076049-2442-4DA3-8462-460703B07356}.Debug|Toradex_CE600 (ARMv4I).Build.0 = Debug|Toradex_CE600 (ARMv4I)
+		{59076049-2442-4DA3-8462-460703B07356}.Debug|Toradex_CE600 (ARMv4I).Deploy.0 = Debug|Toradex_CE600 (ARMv4I)
+		{59076049-2442-4DA3-8462-460703B07356}.Release|Toradex_CE600 (ARMv4I).ActiveCfg = Release|Toradex_CE600 (ARMv4I)
+		{59076049-2442-4DA3-8462-460703B07356}.Release|Toradex_CE600 (ARMv4I).Build.0 = Release|Toradex_CE600 (ARMv4I)
+		{59076049-2442-4DA3-8462-460703B07356}.Release|Toradex_CE600 (ARMv4I).Deploy.0 = Release|Toradex_CE600 (ARMv4I)
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

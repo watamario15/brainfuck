@@ -9,9 +9,9 @@ echo "*** Compiling C++ sources..."
 g++ -Wall -Wextra -O3 -std=c++17 -c *.cpp
 
 echo "*** Compiling res.rc..."
-windres res.rc res.o
+windres resource.rc resource.o
 
 echo "*** Linking..."
-g++ *.o -static -s -lmmtimer -mwindows -municode -o Brainfuck.exe
+g++ *.o -static -s -lcommctrl -lcommdlg -lmmtimer -o AppMain_.exe
 
 echo "OK"

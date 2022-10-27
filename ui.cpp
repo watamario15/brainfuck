@@ -1,44 +1,159 @@
+#include <string>
+
 #ifndef _UNICODE
 #define _UNICODE
 #endif
 #ifndef UNICODE
 #define UNICODE
 #endif
+
+// Since they conflict with the C++ STL and some SDKs don't have them,
+// disables and defines them manually with different names.
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #define mymin(a, b) (((a) < (b)) ? (a) : (b))
+#define mymax(a, b) (((a) > (b)) ? (a) : (b))
 
 #ifdef UNDER_CE
 #include <commctrl.h>
 #include <commdlg.h>
-static HWND hCmdBar;
+#define adjust(coord) (coord)  // DPI scaling isn't needed for Windows CE.
+#else
+#define adjust(coord) ((coord)*dpi / 96)
+// Since old SDKs don't have this enum, defines it manually.
+typedef enum MONITOR_DPI_TYPE {
+  MDT_EFFECTIVE_DPI = 0,
+  MDT_ANGULAR_DPI = 1,
+  MDT_RAW_DPI = 2,
+  MDT_DEFAULT = MDT_EFFECTIVE_DPI
+} MONITOR_DPI_TYPE;
+
+// Function pointer type for GetDpiForMonitor API.
+typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType,
+                                              UINT *dpiX, UINT *dpiY);
+
+// Function pointer type for TaskDialog API.
+typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance, PCWSTR pszWindowTitle,
+                                         PCWSTR pszMainInstruction, PCWSTR pszContent,
+                                         int dwCommonButtons, PCWSTR pszIcon, int *pnButton);
 #endif
 
-#include <string>
+// Makes SetWindowLongW/GetWindowLongW compatible for both 32-bit and 64-bit system.
+#ifdef _WIN64
+#define mySetWindowLongW(hWnd, index, data) SetWindowLongPtrW(hWnd, index, (LRESULT)(data))
+#define myGetWindowLongW(hWnd, index) GetWindowLongPtrW(hWnd, index)
+#ifndef GWL_WNDPROC
+#define GWL_WNDPROC GWLP_WNDPROC
+#endif
+#ifndef GWL_USERDATA
+#define GWL_USERDATA GWLP_USERDATA
+#endif
+#else
+#define mySetWindowLongW(hWnd, index, data) SetWindowLongW(hWnd, index, (LONG)(data))
+#define myGetWindowLongW(hWnd, index) GetWindowLongW(hWnd, index)
+#endif
 
 #include "bf.hpp"
-#include "def.h"
+#include "resource.h"
 #include "ui.hpp"
 
 namespace ui {
-bool signedness = true, wrapInt = true, wrapPtr = false;
-int speed = 10, outCharSet = IDM_OPT_OUTPUT_ASCII, inCharSet = IDM_OPT_INPUT_UTF8;
-enum bf::noinput_t noInput = bf::NOINPUT_ZERO;
-HWND hWnd;
-static HINSTANCE hInst;
-static HWND hEditor, hInput, hOutput, hCmdBtn[4], hScrKB[8];
+enum newline_t { NEWLINE_CRLF, NEWLINE_LF, NEWLINE_CR };
+static const wchar_t *wcCmdBtn[CMDBTN_LEN] = {L"Run", L"Next", L"Pause", L"End"},
+                     *wcScrKB[SCRKBD_LEN] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]", L"@"};
+static HWND hEditor, hInput, hOutput, hMemView, hFocused, hCmdBtn[CMDBTN_LEN], hScrKB[SCRKBD_LEN];
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
+static LOGFONTW editFont;
 static int topPadding = 0, scrX = 480, scrY = 320;
-static enum state_t state = STATE_INIT;
+static unsigned int memViewStart = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
-static const wchar_t *wcCmdBtn[] = {L"Run", L"Next", L"Pause", L"End"},
-                     *wcScrKB[] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]"};
 static std::wstring wstrFileName;
-static bool withBOM = false, wordwrap = false;
+static bool withBOM = false, wordwrap = true;
+static enum newline_t newLine = NEWLINE_CRLF;
+#ifdef UNDER_CE
+static HWND hCmdBar;
+#else
+static TaskDialog_t taskDialog = NULL;
+static int dpi = 96, sysDPI = 96;
+#endif
 
-static inline int adjustX(int x) { return x * scrX / 480; }
-static inline int adjustY(int y) { return y * scrY / 320; }
+enum state_t state = STATE_INIT;
+bool signedness = true, wrapInt = true, breakpoint = false, debug = true, dark = true;
+int speed = 10, outCharSet = IDM_BF_OUTPUT_ASCII, inCharSet = IDM_BF_INPUT_UTF8;
+enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
+HWND hWnd;
+HINSTANCE hInst;
+
+// Translates newline characters from CRLF/LF/CR/LFCR to CRLF/LF/CR.
+// `_target`: A `std::wstring` to operate on, `_newLine`: A desired newline code.
+static enum newline_t convertCRLF(std::wstring &_target, enum newline_t _newLine) {
+  std::wstring::iterator iter = _target.begin();
+  std::wstring::iterator iterEnd = _target.end();
+  std::wstring temp;
+  const wchar_t *nl;
+  size_t CRs = 0, LFs = 0, CRLFs = 0;
+  if (_newLine == NEWLINE_LF) {
+    nl = L"\n";
+  } else if (_newLine == NEWLINE_CR) {
+    nl = L"\r";
+  } else {
+    nl = L"\r\n";
+  }
+
+  if (0 < _target.size()) {
+    wchar_t bNextChar = *iter++;
+
+    while (true) {
+      if (L'\r' == bNextChar) {
+        temp += nl;                  // Newline
+        if (iter == iterEnd) break;  // EOF
+        bNextChar = *iter++;         // Retrive a character
+        if (L'\n' == bNextChar) {
+          if (iter == iterEnd) break;  // EOF
+          bNextChar = *iter++;         // Retrive a character
+          CRLFs++;
+        } else {
+          CRs++;
+        }
+      } else if (L'\n' == bNextChar) {
+        temp += nl;                    // Newline
+        if (iter == iterEnd) break;    // EOF
+        bNextChar = *iter++;           // Retrive a character
+        if (L'\r' == bNextChar) {      // Broken LFCR, so don't count
+          if (iter == iterEnd) break;  // EOF
+          bNextChar = *iter++;         // Retrive a character
+        } else {
+          LFs++;
+        }
+      } else {
+        temp += bNextChar;           // Not a newline
+        if (iter == iterEnd) break;  // EOF
+        bNextChar = *iter++;         // Retrive a character
+      }
+    }
+  }
+
+  _target = temp;
+
+  if (LFs > CRLFs && LFs >= CRs) {
+    return NEWLINE_LF;
+  } else if (CRs > LFs && CRs > CRLFs) {
+    return NEWLINE_CR;
+  } else {
+    return NEWLINE_CRLF;
+  }
+}
+
+// Enables/Disables menu items from the smaller nearest 10 multiple to `_endID`.
+static void enableMenus(unsigned int _endID, bool _enable) {
+  unsigned int i;
+  for (i = (_endID / 10) * 10; i <= _endID; ++i) {
+    EnableMenuItem(hMenu, i, MF_BYCOMMAND | (_enable ? MF_ENABLED : MF_GRAYED));
+  }
+}
 
 void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   size_t i;
@@ -46,7 +161,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   hInst = _hInst;
 
 #ifdef UNDER_CE
-  wchar_t wcMenu[] = L"Menu";  // requires to be non-const for whatever reason
+  wchar_t wcMenu[] = L"menu";  // CommandBar_InsertMenubarEx requires non-const value.
   InitCommonControls();
   hCmdBar = CommandBar_Create(hInst, hWnd, 1);
   CommandBar_InsertMenubarEx(hCmdBar, hInst, wcMenu, 0);
@@ -54,43 +169,119 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   topPadding = CommandBar_Height(hCmdBar);
   hMenu = CommandBar_GetMenu(hCmdBar, 0);
 #else
-  hMenu = LoadMenu(hInst, L"Menu");
+  hMenu = LoadMenu(hInst, L"menu");
   SetMenu(hWnd, hMenu);
 #endif
 
   // Program editor
-  hEditor = CreateWindowExW(0, L"EDIT", L"",
-                            WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE |
-                                ES_AUTOVSCROLL | WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL),
-                            0, 0, 0, 0, hWnd, (HMENU)IDC_EDITOR, hInst, NULL);
+  hEditor =
+      CreateWindowExW(0, L"EDIT", L"",
+                      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
+                          WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
+                      0, 0, 0, 0, hWnd, (HMENU)IDC_EDITOR, hInst, NULL);
   SendMessageW(hEditor, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
   // Program input
-  hInput = CreateWindowExW(0, L"EDIT", L"",
-                           WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE |
-                               ES_AUTOVSCROLL | WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL),
-                           0, 0, 0, 0, hWnd, (HMENU)IDC_INPUT, hInst, NULL);
+  hInput =
+      CreateWindowExW(0, L"EDIT", L"",
+                      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
+                          WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
+                      0, 0, 0, 0, hWnd, (HMENU)IDC_INPUT, hInst, NULL);
   SendMessageW(hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
   // Program output
-  hOutput =
-      CreateWindowExW(0, L"EDIT", L"",
-                      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_READONLY |
-                          ES_AUTOVSCROLL | WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL),
-                      0, 0, 0, 0, hWnd, (HMENU)IDC_OUTPUT, hInst, NULL);
+  hOutput = CreateWindowExW(0, L"EDIT", L"",
+                            WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE |
+                                ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL |
+                                (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
+                            0, 0, 0, 0, hWnd, (HMENU)IDC_OUTPUT, hInst, NULL);
   SendMessageW(hOutput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
+  // Memory view
+  hMemView = CreateWindowExW(0, L"EDIT", L"",
+                             WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE |
+                                 ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | ES_NOHIDESEL,
+                             0, 0, 0, 0, hWnd, (HMENU)IDC_MEMVIEW, hInst, NULL);
+  SendMessageW(hMemView, EM_SETLIMITTEXT, (WPARAM)-1, 0);
+
   // Command button
-  for (i = 0; i < sizeof(hCmdBtn) / sizeof(hCmdBtn[0]); ++i) {
-    hCmdBtn[i] = CreateWindowExW(0, L"BUTTON", wcCmdBtn[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                                 0, 0, 0, 0, hWnd, (HMENU)(IDC_CMDBTN_FIRST + i), hInst, NULL);
+  for (i = 0; i < CMDBTN_LEN; ++i) {
+    hCmdBtn[i] = CreateWindowExW(
+        0, L"BUTTON", wcCmdBtn[i],
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | (i == 2 || i == 3 ? WS_DISABLED : 0), 0, 0, 0, 0,
+        hWnd, (HMENU)(IDC_CMDBTN_FIRST + i), hInst, NULL);
   }
 
   // Screen keyboard
-  for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+  for (i = 0; i < SCRKBD_LEN; ++i) {
     hScrKB[i] = CreateWindowExW(0, L"BUTTON", wcScrKB[i], WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 0,
                                 0, 0, 0, hWnd, (HMENU)(IDC_SCRKBD_FIRST + i), hInst, NULL);
   }
+
+  hFocused = hEditor;
+
+  // Default configurations for the editor font.
+  // We create the actual font object on onSize function.
+  ZeroMemory(&editFont, sizeof(editFont));
+  editFont.lfCharSet = DEFAULT_CHARSET;
+  editFont.lfQuality = ANTIALIASED_QUALITY;
+  editFont.lfHeight = -15;  // Represents font size 11 in 96 DPI.
+#ifdef UNDER_CE
+  // Sets a pre-installed font on Windows CE, as it doesn't have "MS Shell Dlg".
+  lstrcpyW(editFont.lfFaceName, L"Tahoma");
+#else
+  // Sets a logical font face name for localization.
+  // It maps to a default shell font associated with the current culture/locale.
+  lstrcpyW(editFont.lfFaceName, L"MS Shell Dlg");
+
+  // Obtains the "system DPI" value. We use this as the fallback value on older Windows versions
+  // and to calculate the appropriate font height value for ChooseFontW.
+  HDC hDC = GetDC(hWnd);
+  sysDPI = GetDeviceCaps(hDC, LOGPIXELSX);
+  ReleaseDC(hWnd, hDC);
+
+  // Tries to load the GetDpiForMonitor API. Use of the full path improves security. We avoid a
+  // direct call to keep this program compatible with Windows 7 and earlier.
+  //
+  // Microsoft recommends the use of GetDpiForWindow API instead of this API according to their
+  // documentation. However, it requires Windows 10 1607 or later, which makes this compatibility
+  // keeping code more complicated, and GetDpiForMonitor API still works for programs that only use
+  // the process-wide DPI awareness. Here, as we only use the process-wide DPI awareness, we are
+  // going to use GetDpiForMonitor API.
+  //
+  // References:
+  // https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-getdpiformonitor
+  // https://mariusbancila.ro/blog/2021/05/19/how-to-build-high-dpi-aware-native-desktop-applications/
+  GetDpiForMonitor_t getDpiForMonitor = NULL;
+  HMODULE dll = LoadLibraryW(L"C:\\Windows\\System32\\Shcore.dll");
+  if (dll) {
+    getDpiForMonitor = (GetDpiForMonitor_t)(void *)GetProcAddress(dll, "GetDpiForMonitor");
+  }
+
+  // Tests whether it successfully got the GetDpiForMonitor API.
+  if (getDpiForMonitor) {  // It got (the system is presumably Windows 8.1 or later).
+    unsigned int tmpX, tmpY;
+    getDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &tmpX,
+                     &tmpY);
+    dpi = tmpX;
+  } else {  // It failed (the system is presumably older than Windows 8.1).
+    dpi = sysDPI;
+  }
+  if (dll) FreeLibrary(dll);
+
+  // Adjusts the windows size according to the DPI value.
+  SetWindowPos(hWnd, NULL, 0, 0, adjust(480), adjust(320),
+               SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
+
+  // Tries to load the TaskDialog API which is a newer substitite of MessageBoxW.
+  // This API is per monitor DPI aware but doesn't exist before Windows Vista.
+  // To make the system select version 6 comctl32.dll, we don't use the full path here.
+  dll = NULL;
+  dll = LoadLibraryW(L"comctl32.dll");
+  if (dll) {
+    taskDialog = (TaskDialog_t)(void *)GetProcAddress(dll, "TaskDialog");
+  }
+#endif
 }
 
 void onDestroy() {
@@ -101,104 +292,94 @@ void onDestroy() {
 }
 
 void onSize() {
+  RECT rect;
+
+#ifdef UNDER_CE
+  // Manually forces the minimum window size as Windows CE doesn't support WM_GETMINMAXINFO.
+  // Seemingly, Windows CE doesn't re-send WM_SIZE on SetWindowPos calls inside a WM_SIZE handler.
+  GetWindowRect(hWnd, &rect);
+  if (rect.right - rect.left < 480 || rect.bottom - rect.top < 320) {
+    SetWindowPos(hWnd, NULL, 0, 0, mymax(480, rect.right - rect.left),
+                 mymax(320, rect.bottom - rect.top), SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
+  }
+#endif
+
   size_t i;
   LOGFONTW rLogfont;
-  RECT rect;
   GetClientRect(hWnd, &rect);
   scrX = rect.right;
   scrY = rect.bottom - topPadding;
 
   // Button font
-  rLogfont.lfHeight = mymin(adjustX(16), adjustY(16));
-  rLogfont.lfWidth = 0;
-  rLogfont.lfEscapement = 0;
-  rLogfont.lfOrientation = 0;
-  rLogfont.lfWeight = FW_NORMAL;
-  rLogfont.lfItalic = FALSE;
-  rLogfont.lfUnderline = FALSE;
-  rLogfont.lfStrikeOut = FALSE;
+  ZeroMemory(&rLogfont, sizeof(rLogfont));
+  rLogfont.lfHeight = adjust(-15);
+  rLogfont.lfWeight = FW_BOLD;
   rLogfont.lfCharSet = DEFAULT_CHARSET;
-  rLogfont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-  rLogfont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-  rLogfont.lfQuality = DEFAULT_QUALITY;
-  rLogfont.lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
-  lstrcpyW(rLogfont.lfFaceName, L"MS Shell Dlg");
+  rLogfont.lfQuality = ANTIALIASED_QUALITY;
+  lstrcpyW(rLogfont.lfFaceName, editFont.lfFaceName);  // Syncs with editors.
   HFONT newBtnFont = CreateFontIndirectW(&rLogfont);
 
   // Editor/Output font
-  rLogfont.lfHeight = mymin(adjustX(16), adjustY(16));
-  if (rLogfont.lfHeight < 12) rLogfont.lfHeight = 12;  // Lower bound
-  rLogfont.lfWidth = 0;
-  rLogfont.lfEscapement = 0;
-  rLogfont.lfOrientation = 0;
-  rLogfont.lfWeight = FW_NORMAL;
-  rLogfont.lfItalic = FALSE;
-  rLogfont.lfUnderline = FALSE;
-  rLogfont.lfStrikeOut = FALSE;
-  rLogfont.lfCharSet = DEFAULT_CHARSET;
-  rLogfont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-  rLogfont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-  rLogfont.lfQuality = DEFAULT_QUALITY;
-  rLogfont.lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
-  lstrcpyW(rLogfont.lfFaceName, L"MS Shell Dlg");
+  memcpy(&rLogfont, &editFont, sizeof(LOGFONTW));
+  rLogfont.lfHeight = adjust(editFont.lfHeight);
   HFONT newEditFont = CreateFontIndirectW(&rLogfont);
 
-  // Move and resize the controls
-  int curX = 0;
-  for (i = 0; i < sizeof(hCmdBtn) / sizeof(hCmdBtn[0]); ++i) {
-    MoveWindow(hCmdBtn[i], curX, topPadding, adjustX(48), adjustY(32), TRUE);
-    SendMessageW(hCmdBtn[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(FALSE, 0));
-    curX += adjustX(48);
-  }
-  for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
-    MoveWindow(hScrKB[i], curX, topPadding, adjustX(32), adjustY(32), TRUE);
-    SendMessageW(hScrKB[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(FALSE, 0));
-    curX += adjustX(32);
-  }
+#ifdef UNDER_CE
+  // We must "move" the command bar to prevent a glitch.
+  MoveWindow(hCmdBar, 0, 0, 0, 0, TRUE);
+#endif
 
-  MoveWindow(hEditor, 0, topPadding + adjustY(32), scrX,
-             scrY - adjustY(32) - adjustY(64) - adjustY(64), TRUE);
-  SendMessageW(hEditor, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(FALSE, 0));
-  MoveWindow(hInput, 0, scrY + topPadding - adjustY(64) - adjustY(64), scrX, adjustY(64), TRUE);
-  SendMessageW(hInput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(FALSE, 0));
-  MoveWindow(hOutput, 0, scrY + topPadding - adjustY(64), scrX, adjustY(64), TRUE);
-  SendMessageW(hOutput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(FALSE, 0));
+  // Moves and resizes controls, and applies the newly created fonts for them.
+  int curX = 0;
+  for (i = 0; i < CMDBTN_LEN; ++i) {
+    MoveWindow(hCmdBtn[i], curX, topPadding, adjust(46), adjust(32), TRUE);
+    SendMessageW(hCmdBtn[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
+    curX += adjust(46);
+  }
+  for (i = 0; i < SCRKBD_LEN; ++i) {
+    MoveWindow(hScrKB[i], curX, topPadding, adjust(30), adjust(32), TRUE);
+    SendMessageW(hScrKB[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
+    curX += adjust(30);
+  }
+  MoveWindow(hEditor, 0, topPadding + adjust(32), scrX, scrY - adjust(32) - adjust(64) * 2, TRUE);
+  SendMessageW(hEditor, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
+  MoveWindow(hInput, 0, scrY + topPadding - adjust(64) * 2, scrX / 2, adjust(64), TRUE);
+  SendMessageW(hInput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
+  MoveWindow(hOutput, scrX / 2, scrY + topPadding - adjust(64) * 2, scrX - scrX / 2, adjust(64),
+             TRUE);
+  SendMessageW(hOutput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
+  MoveWindow(hMemView, 0, scrY + topPadding - adjust(64), scrX, adjust(64), TRUE);
+  SendMessageW(hMemView, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
 
   if (hBtnFont) DeleteObject(hBtnFont);
   if (hEditFont) DeleteObject(hEditFont);
   hBtnFont = newBtnFont;
   hEditFont = newEditFont;
-  InvalidateRect(hWnd, NULL, TRUE);
+  InvalidateRect(hWnd, NULL, FALSE);
 }
-
-void onPaint() {
-  RECT rect;
-  PAINTSTRUCT ps;
-  GetClientRect(hWnd, &rect);
-  HDC hDC = BeginPaint(hWnd, &ps);
-
-  if (state == STATE_INIT) {
-    FillRect(hDC, &rect, GetSysColorBrush(COLOR_BTNFACE));
-  } else if (state == STATE_RUN) {
-    HBRUSH hBrush = CreateSolidBrush(RGB(255, 255, 0));
-    FillRect(hDC, &rect, hBrush);
-    DeleteObject(hBrush);
-  } else if (state == STATE_PAUSE) {
-    HBRUSH hBrush = CreateSolidBrush(RGB(0, 255, 255));
-    FillRect(hDC, &rect, hBrush);
-    DeleteObject(hBrush);
-  } else if (state == STATE_FINISH) {
-    HBRUSH hBrush = CreateSolidBrush(RGB(0, 255, 0));
-    FillRect(hDC, &rect, hBrush);
-    DeleteObject(hBrush);
-  }
-
-  EndPaint(hWnd, &ps);
-}
-
-void onActivate() { SetFocus(hEditor); }
 
 void onInitMenuPopup() {
+  // Brainfuck -> Memory type
+  CheckMenuRadioItem(hMenu, IDM_BF_MEMTYPE_SIGNED, IDM_BF_MEMTYPE_UNSIGNED,
+                     signedness ? IDM_BF_MEMTYPE_SIGNED : IDM_BF_MEMTYPE_UNSIGNED, MF_BYCOMMAND);
+
+  // Brainfuck -> Output charset
+  CheckMenuRadioItem(hMenu, IDM_BF_OUTPUT_ASCII, IDM_BF_OUTPUT_HEX, outCharSet, MF_BYCOMMAND);
+
+  // Brainfuck -> Input charset
+  CheckMenuRadioItem(hMenu, IDM_BF_INPUT_UTF8, IDM_BF_INPUT_HEX, inCharSet, MF_BYCOMMAND);
+
+  // Brainfuck -> Input instruction
+  CheckMenuRadioItem(hMenu, IDM_BF_NOINPUT_ERROR, IDM_BF_NOINPUT_FF, IDM_BF_NOINPUT_ERROR + noInput,
+                     MF_BYCOMMAND);
+
+  // Brainfuck -> Integer overflow
+  CheckMenuRadioItem(hMenu, IDM_BF_INTOVF_ERROR, IDM_BF_INTOVF_WRAPAROUND,
+                     wrapInt ? IDM_BF_INTOVF_WRAPAROUND : IDM_BF_INTOVF_ERROR, MF_BYCOMMAND);
+
+  // Brainfuck -> Breakpoint
+  CheckMenuItem(hMenu, IDM_BF_BREAKPOINT, MF_BYCOMMAND | breakpoint ? MF_CHECKED : MF_UNCHECKED);
+
   // Options -> Speed
   if (speed == 0) {
     CheckMenuRadioItem(hMenu, IDM_OPT_SPEED_FASTEST, IDM_OPT_SPEED_100MS, IDM_OPT_SPEED_FASTEST,
@@ -214,73 +395,263 @@ void onInitMenuPopup() {
                        MF_BYCOMMAND);
   }
 
-  // Options -> Memory type
-  CheckMenuRadioItem(hMenu, IDM_OPT_MEMTYPE_SIGNED, IDM_OPT_MEMTYPE_UNSIGNED,
-                     signedness ? IDM_OPT_MEMTYPE_SIGNED : IDM_OPT_MEMTYPE_UNSIGNED, MF_BYCOMMAND);
+  // Options -> Debug
+  CheckMenuItem(hMenu, IDM_OPT_TRACK, MF_BYCOMMAND | debug ? MF_CHECKED : MF_UNCHECKED);
 
-  // Options -> Output charset
-  CheckMenuRadioItem(hMenu, IDM_OPT_OUTPUT_ASCII, IDM_OPT_OUTPUT_HEX, outCharSet, MF_BYCOMMAND);
-
-  // Options -> Input charset
-  CheckMenuRadioItem(hMenu, IDM_OPT_INPUT_UTF8, IDM_OPT_INPUT_HEX, inCharSet, MF_BYCOMMAND);
-
-  // Options -> Input instruction
-  CheckMenuRadioItem(hMenu, IDM_OPT_NOINPUT_ERROR, IDM_OPT_NOINPUT_FF,
-                     IDM_OPT_NOINPUT_ERROR + noInput, MF_BYCOMMAND);
-
-  // Options -> Integer overflow
-  CheckMenuRadioItem(hMenu, IDM_OPT_INTOVF_ERROR, IDM_OPT_INTOVF_WRAPAROUND,
-                     wrapInt ? IDM_OPT_INTOVF_WRAPAROUND : IDM_OPT_INTOVF_ERROR, MF_BYCOMMAND);
-
-  // Options -> Pointer overflow
-  CheckMenuRadioItem(hMenu, IDM_OPT_PTROVF_ERROR, IDM_OPT_PTROVF_WRAPAROUND,
-                     wrapPtr ? IDM_OPT_PTROVF_WRAPAROUND : IDM_OPT_PTROVF_ERROR, MF_BYCOMMAND);
+  // Options -> Dark theme
+  CheckMenuItem(hMenu, IDM_OPT_DARK, MF_BYCOMMAND | dark ? MF_CHECKED : MF_UNCHECKED);
 
   // Options -> Word wrap
-  CheckMenuItem(hMenu, IDM_OPT_WORDWRAP, wordwrap);
+  CheckMenuItem(hMenu, IDM_OPT_WORDWRAP, MF_BYCOMMAND | wordwrap ? MF_CHECKED : MF_UNCHECKED);
 
-  HMENU hOptMenu = GetSubMenu(hMenu, 1);
+  bool undoable = SendMessageW(hEditor, EM_CANUNDO, 0, 0) != 0;
+
   if (state == STATE_INIT) {
-    EnableMenuItem(hMenu, IDM_FILE_NEW, MF_BYCOMMAND | MF_ENABLED);
-    EnableMenuItem(hMenu, IDM_FILE_OPEN, MF_BYCOMMAND | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 0, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 1, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 2, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 3, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 4, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 5, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 6, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 7, MF_BYPOSITION | MF_ENABLED);
+    enableMenus(IDM_FILE_NEW, true);
+    enableMenus(IDM_FILE_OPEN, true);
+    enableMenus(IDM_EDIT_UNDO, undoable);
+    enableMenus(IDM_BF_MEMTYPE_UNSIGNED, true);
+    enableMenus(IDM_BF_OUTPUT_HEX, true);
+    enableMenus(IDM_BF_INPUT_HEX, true);
+    enableMenus(IDM_BF_NOINPUT_FF, true);
+    enableMenus(IDM_BF_INTOVF_WRAPAROUND, true);
+    enableMenus(IDM_BF_BREAKPOINT, true);
+    enableMenus(IDM_OPT_SPEED_100MS, true);
+    enableMenus(IDM_OPT_MEMVIEW, true);
+    enableMenus(IDM_OPT_TRACK, true);
+    enableMenus(IDM_OPT_HLTPROG, false);
+    enableMenus(IDM_OPT_HLTMEM, false);
   } else if (state == STATE_RUN) {
-    EnableMenuItem(hMenu, IDM_FILE_NEW, MF_BYCOMMAND | MF_GRAYED);
-    EnableMenuItem(hMenu, IDM_FILE_OPEN, MF_BYCOMMAND | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 0, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 1, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 2, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 3, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 4, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 5, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 6, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 7, MF_BYPOSITION | MF_ENABLED);
+    enableMenus(IDM_FILE_NEW, false);
+    enableMenus(IDM_FILE_OPEN, false);
+    enableMenus(IDM_EDIT_UNDO, false);
+    enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
+    enableMenus(IDM_BF_OUTPUT_HEX, false);
+    enableMenus(IDM_BF_INPUT_HEX, false);
+    enableMenus(IDM_BF_NOINPUT_FF, false);
+    enableMenus(IDM_BF_INTOVF_WRAPAROUND, false);
+    enableMenus(IDM_BF_BREAKPOINT, false);
+    enableMenus(IDM_OPT_SPEED_100MS, false);
+    enableMenus(IDM_OPT_MEMVIEW, false);
+    enableMenus(IDM_OPT_TRACK, false);
+    enableMenus(IDM_OPT_HLTPROG, false);
+    enableMenus(IDM_OPT_HLTMEM, false);
   } else if (state == STATE_PAUSE || state == STATE_FINISH) {
-    EnableMenuItem(hMenu, IDM_FILE_NEW, MF_BYCOMMAND | MF_GRAYED);
-    EnableMenuItem(hMenu, IDM_FILE_OPEN, MF_BYCOMMAND | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 0, MF_BYPOSITION | MF_ENABLED);
-    EnableMenuItem(hOptMenu, 1, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 2, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 3, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 4, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 5, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 6, MF_BYPOSITION | MF_GRAYED);
-    EnableMenuItem(hOptMenu, 7, MF_BYPOSITION | MF_ENABLED);
+    enableMenus(IDM_FILE_NEW, false);
+    enableMenus(IDM_FILE_OPEN, false);
+    enableMenus(IDM_EDIT_UNDO, false);
+    enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
+    enableMenus(IDM_BF_OUTPUT_HEX, false);
+    enableMenus(IDM_BF_INPUT_HEX, false);
+    enableMenus(IDM_BF_NOINPUT_FF, false);
+    enableMenus(IDM_BF_INTOVF_WRAPAROUND, false);
+    enableMenus(IDM_BF_BREAKPOINT, true);
+    enableMenus(IDM_OPT_SPEED_100MS, true);
+    enableMenus(IDM_OPT_MEMVIEW, true);
+    enableMenus(IDM_OPT_TRACK, true);
+    enableMenus(IDM_OPT_HLTPROG, true);
+    enableMenus(IDM_OPT_HLTMEM, true);
   }
 }
 
-void onScreenKeyboard(int _key) { SendMessageW(hEditor, EM_REPLACESEL, 0, (WPARAM)wcScrKB[_key]); }
+#ifndef UNDER_CE
+void onDropFiles(HDROP hDrop) {
+  wchar_t wcFileName[MAX_PATH];
+  DragQueryFileW(hDrop, 0, wcFileName, MAX_PATH);
+  DragFinish(hDrop);
+  openFile(false, wcFileName);
+}
 
-void setState(enum state_t _state) {
+void onGetMinMaxInfo(MINMAXINFO *_minMaxInfo) {
+  _minMaxInfo->ptMinTrackSize.x = adjust(480);
+  _minMaxInfo->ptMinTrackSize.y = adjust(320);
+}
+
+void onDPIChanged(int _dpi, const RECT *_rect) {
+  dpi = _dpi;
+  MoveWindow(hWnd, _rect->left, _rect->top, _rect->right - _rect->left, _rect->bottom - _rect->top,
+             FALSE);
+}
+#endif
+
+void onScreenKeyboard(int _key) {
+  if (hFocused == hEditor) SendMessageW(hEditor, EM_REPLACESEL, 0, (WPARAM)wcScrKB[_key]);
+}
+
+void cut() { SendMessageW(hFocused, WM_CUT, 0, 0); }
+
+void copy() { SendMessageW(hFocused, WM_COPY, 0, 0); }
+
+void paste() { SendMessageW(hFocused, WM_PASTE, 0, 0); }
+
+void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
+
+void undo() { SendMessageW(hEditor, EM_UNDO, 0, 0); }
+
+int messageBox(HWND _hWnd, const wchar_t *_lpText, const wchar_t *_lpCaption, unsigned int _uType) {
+#ifndef UNDER_CE
+  if (taskDialog) {
+    // Tests whether _uType uses some features that TaskDialog doesn't support.
+    if (_uType & ~(MB_ICONMASK | MB_TYPEMASK)) goto mbfallback;
+
+    int buttons;
+    switch (_uType & MB_TYPEMASK) {
+      case MB_OK:
+        buttons = 1;
+        break;
+      case MB_OKCANCEL:
+        buttons = 1 + 8;
+        break;
+      case MB_RETRYCANCEL:
+        buttons = 16 + 8;
+        break;
+      case MB_YESNO:
+        buttons = 2 + 4;
+        break;
+      case MB_YESNOCANCEL:
+        buttons = 2 + 4 + 8;
+        break;
+      default:  // Not supported by TaskDialog.
+        goto mbfallback;
+    }
+
+    wchar_t *icon;
+    switch (_uType & MB_ICONMASK) {
+      case 0:
+        icon = NULL;
+        break;
+      case MB_ICONWARNING:  // Same value as MB_ICONEXCLAMATION.
+        icon = MAKEINTRESOURCEW(-1);
+        break;
+      case MB_ICONERROR:  // Same value as MB_ICONSTOP and MB_ICONHAND.
+        icon = MAKEINTRESOURCEW(-2);
+        break;
+      default:  // Fallbacks everything else for Information icon.
+        icon = MAKEINTRESOURCEW(-3);
+    }
+
+    int result;
+    taskDialog(_hWnd, hInst, _lpCaption, L"", _lpText, buttons, icon, &result);
+    return result;
+  }
+mbfallback:
+#endif
+  return MessageBoxW(_hWnd, _lpText, _lpCaption, _uType);
+}
+
+// Hook window procedure for the edit control in the memory view options dialog.
+// This procedure translates top row character keys to numbers according to the keyboard layout of
+// SHARP Brain.
+static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
+
+  switch (uMsg) {
+    case WM_CHAR:
+      switch ((CHAR)wParam) {
+        case 'q':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"1");
+          return 0;
+
+        case 'w':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"2");
+          return 0;
+
+        case 'e':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"3");
+          return 0;
+
+        case 'r':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"4");
+          return 0;
+
+        case 't':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"5");
+          return 0;
+
+        case 'y':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"6");
+          return 0;
+
+        case 'u':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"7");
+          return 0;
+
+        case 'i':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"8");
+          return 0;
+
+        case 'o':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"9");
+          return 0;
+
+        case 'p':
+          SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"0");
+          return 0;
+      }
+      break;
+
+    case WM_DESTROY:
+      mySetWindowLongW(hWnd, GWL_WNDPROC, prevWndProc);
+      return 0;
+  }
+
+  return CallWindowProcW(prevWndProc, hWnd, uMsg, wParam, lParam);
+}
+
+// Window procedure for the memory view options dialog.
+INT_PTR CALLBACK memViewProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  UNREFERENCED_PARAMETER(lParam);
+
+  switch (uMsg) {
+    case WM_INITDIALOG: {
+      // Puts the dialog at the center of the parent window.
+      RECT wndSize, wndRect, dlgRect;
+      GetWindowRect(hDlg, &dlgRect);
+      GetWindowRect(hWnd, &wndRect);
+      GetClientRect(hWnd, &wndSize);
+      int newPosX = wndRect.left + (wndSize.right - (dlgRect.right - dlgRect.left)) / 2,
+          newPosY = wndRect.top + (wndSize.bottom - (dlgRect.bottom - dlgRect.top)) / 2;
+      if (newPosX < 0) newPosX = 0;
+      if (newPosY < 0) newPosY = 0;
+      SetWindowPos(hDlg, NULL, newPosX, newPosY, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+
+      wchar_t editBuf[10];
+      HWND hEdit = GetDlgItem(hDlg, 3);
+      wsprintfW(editBuf, L"%u", memViewStart <= 999999999 ? memViewStart : 999999999);
+      SendDlgItemMessageW(hDlg, 3, EM_SETLIMITTEXT, 9, 0);
+      SetDlgItemTextW(hDlg, 3, editBuf);
+      mySetWindowLongW(hEdit, GWL_USERDATA, mySetWindowLongW(hEdit, GWL_WNDPROC, memViewDlgEditor));
+      return TRUE;
+    }
+
+    case WM_COMMAND:
+      switch (LOWORD(wParam)) {
+        case IDOK: {
+          wchar_t editBuf[10];
+          long temp;
+          GetDlgItemTextW(hDlg, 3, (wchar_t *)editBuf, 10);
+          temp = wcstol(editBuf, NULL, 10);
+          if (temp < 0) {
+            messageBox(hDlg, L"Invalid input.", L"Error", MB_ICONWARNING);
+          } else {
+            memViewStart = temp;
+            EndDialog(hDlg, IDOK);
+          }
+          return TRUE;
+        }
+
+        case IDCANCEL:
+          EndDialog(hDlg, IDCANCEL);
+          return TRUE;
+      }
+      return FALSE;
+  }
+  return FALSE;
+}
+
+void setState(enum state_t _state, bool _force) {
   size_t i;
-  if (_state == state) return;
+  if (!_force && _state == state) return;
 
   if (_state == STATE_INIT) {
     EnableWindow(hCmdBtn[0], TRUE);   // run button
@@ -290,7 +661,7 @@ void setState(enum state_t _state) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)FALSE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)FALSE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], TRUE);
     }
   } else if (_state == STATE_RUN) {
@@ -301,7 +672,7 @@ void setState(enum state_t _state) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], FALSE);
     }
   } else if (_state == STATE_PAUSE) {
@@ -312,7 +683,7 @@ void setState(enum state_t _state) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], FALSE);
     }
   } else if (_state == STATE_FINISH) {
@@ -323,7 +694,7 @@ void setState(enum state_t _state) {
     SendMessageW(hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < sizeof(hScrKB) / sizeof(hScrKB[0]); ++i) {
+    for (i = 0; i < SCRKBD_LEN; ++i) {
       EnableWindow(hScrKB[i], FALSE);
     }
   }
@@ -332,7 +703,61 @@ void setState(enum state_t _state) {
   InvalidateRect(hWnd, NULL, FALSE);
 }
 
-void setFocus() { SetFocus(hEditor); }
+void updateFocus(int _id) {
+  switch (_id) {
+    case IDC_EDITOR:
+      hFocused = hEditor;
+      break;
+
+    case IDC_INPUT:
+      hFocused = hInput;
+      break;
+
+    case IDC_OUTPUT:
+      hFocused = hOutput;
+      break;
+
+    case IDC_MEMVIEW:
+      hFocused = hMemView;
+      break;
+
+    default:
+      SetFocus(hFocused);
+  }
+}
+
+void selProg(unsigned int _progPtr) { SendMessageW(hEditor, EM_SETSEL, _progPtr, _progPtr + 1); }
+
+void selMemView(unsigned int _memPtr) {
+  SendMessageW(hMemView, EM_SETSEL, (_memPtr - memViewStart) * 3, (_memPtr - memViewStart) * 3 + 2);
+}
+
+void setMemory(const std::vector<unsigned char> *memory) {
+  if (!memory) {
+    SetWindowTextW(hMemView, NULL);
+    return;
+  }
+
+  unsigned int i;
+  std::wstring wstrOut;
+  for (i = memViewStart; i < memViewStart + 100 && i < memory->size(); ++i) {
+    // Converts to a hexadecimal string.
+    wchar_t wcOut[] = {0, 0, L' ', 0};
+    unsigned char high = memory->at(i) >> 4, low = memory->at(i) & 0xF;
+    if (high < 10) {
+      wcOut[0] = L'0' + high;
+    } else {
+      wcOut[0] = L'A' + (high - 10);
+    }
+    if (low < 10) {
+      wcOut[1] = L'0' + low;
+    } else {
+      wcOut[1] = L'A' + (low - 10);
+    }
+    wstrOut.append(wcOut);
+  }
+  SetWindowTextW(hMemView, wstrOut.c_str());
+}
 
 wchar_t *getEditor() {
   int editorSize = GetWindowTextLengthW(hEditor) + 1;
@@ -351,8 +776,6 @@ wchar_t *getInput() {
 
   return retInBuf;
 }
-
-void clearOutput() { SetWindowTextW(hOutput, L""); }
 
 void setOutput(const wchar_t *_str) { SetWindowTextW(hOutput, _str); }
 
@@ -385,7 +808,7 @@ void switchWordwrap() {
   hEditor =
       CreateWindowExW(0, L"EDIT", L"",
                       WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
-                          WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL),
+                          WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
                       0, 0, 0, 0, hWnd, (HMENU)IDC_EDITOR, hInst, NULL);
   SendMessageW(hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
@@ -393,7 +816,7 @@ void switchWordwrap() {
   hInput =
       CreateWindowExW(0, L"EDIT", L"",
                       WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
-                          WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL),
+                          WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
                       0, 0, 0, 0, hWnd, (HMENU)IDC_INPUT, hInst, NULL);
   SendMessageW(hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
@@ -401,11 +824,14 @@ void switchWordwrap() {
   hOutput = CreateWindowExW(0, L"EDIT", L"",
                             WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE |
                                 ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL |
-                                (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL),
+                                (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
                             0, 0, 0, 0, hWnd, (HMENU)IDC_OUTPUT, hInst, NULL);
   SendMessageW(hOutput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
+  hFocused = hEditor;
+  updateFocus();
   onSize();
+  setState(state, true);
 
   SetWindowTextW(hEditor, wcEditor);
   SendMessageW(hEditor, EM_SETMODIFY, isModified, 0);
@@ -417,11 +843,58 @@ void switchWordwrap() {
   delete[] wcOutput;
 }
 
+void switchTheme() {
+  dark = !dark;
+
+  InvalidateRect(hEditor, NULL, FALSE);
+  InvalidateRect(hInput, NULL, FALSE);
+  InvalidateRect(hOutput, NULL, FALSE);
+  InvalidateRect(hMemView, NULL, FALSE);
+}
+
+void chooseFont() {
+#ifndef UNDER_CE
+  LONG origHeight = editFont.lfHeight;
+  // Temporarilly sets to the "System DPI scaled" value since ChooseFontW expects it.
+  // Subtracting by 96 - 1 makes this division to behave like a ceiling function.
+  // Note that editFont.lfHeight is negative.
+  editFont.lfHeight = (editFont.lfHeight * sysDPI - (96 - 1)) / 96;
+#endif
+
+  CHOOSEFONTW cf;
+  cf.lStructSize = sizeof(CHOOSEFONTW);
+  cf.hwndOwner = hWnd;
+  cf.lpLogFont = &editFont;
+  cf.hDC = GetDC(hWnd);  // Required for CF_BOTH.
+  // We won't get any fonts if we omit CF_BOTH on Windows CE.
+  cf.Flags = CF_INITTOLOGFONTSTRUCT | CF_FORCEFONTEXIST | CF_BOTH;
+  BOOL ret = ChooseFontW(&cf);
+  ReleaseDC(hWnd, cf.hDC);
+
+#ifdef UNDER_CE
+  if (ret) {
+    editFont.lfQuality = ANTIALIASED_QUALITY;
+    onSize();
+  }
+#else
+  if (ret) {
+    // Re-converts to the 96 DPI value as we properly adjust it on the fly.
+    editFont.lfHeight = (editFont.lfHeight * 96 - (sysDPI - 1)) / sysDPI;
+    editFont.lfQuality = ANTIALIASED_QUALITY;
+    onSize();
+  } else {
+    // Rewrites the original value instead of re-converting.
+    // Re-converting can results in a different value.
+    editFont.lfHeight = origHeight;
+  }
+#endif
+}
+
 bool promptSave() {
   if (SendMessageW(hEditor, EM_GETMODIFY, 0, 0) == 0) return true;
 
-  int ret = MessageBoxW(hWnd, L"Unsaved data will be lost. Save changes?", L"Confirm",
-                        MB_ICONWARNING | MB_YESNOCANCEL);
+  int ret = messageBox(hWnd, L"Unsaved data will be lost. Save changes?", L"Confirm",
+                       MB_ICONWARNING | MB_YESNOCANCEL);
 
   if (ret == IDCANCEL) {
     return false;
@@ -435,7 +908,7 @@ bool promptSave() {
     return true;
   }
 
-  // shouldn't be reached
+  // Shouldn't be reached.
   return true;
 }
 
@@ -446,9 +919,11 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
 
   if (_newFile) {  // new
     SetWindowTextW(hEditor, L"");
+    SetWindowTextW(hWnd, APP_NAME);
     SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
     wstrFileName = L"";
     withBOM = false;
+    newLine = NEWLINE_CRLF;
     return;
   }
 
@@ -474,7 +949,7 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   HANDLE hFile = CreateFileW(_fileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                              FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
-    MessageBoxW(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
     return;
   }
 
@@ -482,28 +957,30 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   char *fileBuf = new char[fileSize];
   int padding = 0;
   ReadFile(hFile, fileBuf, fileSize, &readLen, NULL);
-  if (fileBuf[0] == '\xEF' && fileBuf[1] == '\xBB' && fileBuf[2] == '\xBF') padding = 3;
+  CloseHandle(hFile);
+  if (fileBuf[0] == '\xEF' && fileBuf[1] == '\xBB' && fileBuf[2] == '\xBF') padding = 3;  // BOM
   int length = MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, NULL, 0);
   if (length >= 0x7FFFFFFE) {
-    MessageBoxW(hWnd, L"This file is too large.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"This file is too large.", L"Error", MB_ICONWARNING);
     delete[] fileBuf;
-    CloseHandle(hFile);
     return;
   }
-  wchar_t *wcFileBuf = new wchar_t[length + 1]();
+  wchar_t *wcFileBuf = new wchar_t[length + 1];
+  wcFileBuf[length] = 0;
   MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, wcFileBuf, length);
+  delete[] fileBuf;
 
-  SetWindowTextW(hEditor, wcFileBuf);
+  std::wstring converted = wcFileBuf;
+  delete[] wcFileBuf;
+  newLine = convertCRLF(converted, NEWLINE_CRLF);
+
+  SetWindowTextW(hEditor, converted.c_str());
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
   wstrFileName = _fileName;
   withBOM = padding != 0;
 
-  CloseHandle(hFile);
-  delete[] fileBuf;
-  delete[] wcFileBuf;
-
-  std::wstring title = APP_NAME L" - ";
-  title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1));
+  std::wstring title = L"[";
+  title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1) + L"] - " APP_NAME);
   SetWindowTextW(hWnd, title.c_str());
 }
 
@@ -531,32 +1008,35 @@ bool saveFile(bool _isOverwrite) {
     wstrFileName.copy(wcFileName, MAX_PATH);
   }
 
-  HANDLE hFile = CreateFileW(wcFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
-                             FILE_ATTRIBUTE_NORMAL, NULL);
-  if (hFile == INVALID_HANDLE_VALUE) {
-    MessageBoxW(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
-    return false;
-  }
-
   int editorSize = GetWindowTextLengthW(hEditor) + 1;
   wchar_t *wcEditor = new wchar_t[editorSize];
   GetWindowTextW(hEditor, wcEditor, editorSize);
-  int length = WideCharToMultiByte(CP_UTF8, 0, wcEditor, -1, NULL, 0, NULL, NULL);
+  std::wstring converted = wcEditor;
+  delete[] wcEditor;
+
+  if (newLine != NEWLINE_CRLF) convertCRLF(converted, newLine);
+  int length = WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, NULL, 0, NULL, NULL);
   char *szEditor = new char[length];
-  WideCharToMultiByte(CP_UTF8, 0, wcEditor, -1, szEditor, length, NULL, NULL);
+  WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, szEditor, length, NULL, NULL);
+
+  HANDLE hFile = CreateFileW(wcFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
+                             FILE_ATTRIBUTE_NORMAL, NULL);
+  if (hFile == INVALID_HANDLE_VALUE) {
+    messageBox(hWnd, L"Open failed.", L"Error", MB_ICONWARNING);
+    return false;
+  }
+
   DWORD dwTemp;
-  if (withBOM) WriteFile(hFile, "\xEF\xBB\xBF", 3, &dwTemp, NULL);
+  if (withBOM) WriteFile(hFile, "\xEF\xBB\xBF", 3, &dwTemp, NULL);  // BOM
   WriteFile(hFile, szEditor, length - 1, &dwTemp, NULL);
+  CloseHandle(hFile);
+  delete[] szEditor;
 
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
   wstrFileName = wcFileName;
 
-  CloseHandle(hFile);
-  delete[] wcEditor;
-  delete[] szEditor;
-
-  std::wstring title = APP_NAME L" - ";
-  title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1));
+  std::wstring title = L"[";
+  title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1) + L"] - " APP_NAME);
   SetWindowTextW(hWnd, title.c_str());
 
   return true;

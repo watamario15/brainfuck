@@ -425,6 +425,10 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case IDM_FILE_EXIT:
           SendMessageW(hWnd, WM_CLOSE, 0, 0);
           break;
+        
+        case IDM_EDIT_UNDO:
+          ui::undo();
+          break;
 
         case IDM_EDIT_CUT:
           ui::cut();

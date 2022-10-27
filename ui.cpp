@@ -71,7 +71,7 @@ static int topPadding = 0, scrX = 480, scrY = 320;
 static unsigned int memViewStart = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
 static std::wstring wstrFileName;
-static bool withBOM = false, wordwrap = false;
+static bool withBOM = false, wordwrap = true;
 static enum newline_t newLine = NEWLINE_CRLF;
 #ifdef UNDER_CE
 static HWND hCmdBar;
@@ -81,7 +81,7 @@ static int dpi = 96, sysDPI = 96;
 #endif
 
 enum state_t state = STATE_INIT;
-bool signedness = true, wrapInt = true, breakpoint = false, debug = false, dark = true;
+bool signedness = true, wrapInt = true, breakpoint = false, debug = true, dark = true;
 int speed = 10, outCharSet = IDM_BF_OUTPUT_ASCII, inCharSet = IDM_BF_INPUT_UTF8;
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
 HWND hWnd;
@@ -341,13 +341,12 @@ void onSize() {
     SendMessageW(hScrKB[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
     curX += adjust(30);
   }
-  MoveWindow(hEditor, 0, topPadding + adjust(32), scrX, scrY - adjust(32) - adjust(64) - adjust(64),
-             TRUE);
+  MoveWindow(hEditor, 0, topPadding + adjust(32), scrX, scrY - adjust(32) - adjust(64) * 2, TRUE);
   SendMessageW(hEditor, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
-  MoveWindow(hInput, 0, scrY + topPadding - adjust(64) - adjust(64), scrX / 2, adjust(64), TRUE);
+  MoveWindow(hInput, 0, scrY + topPadding - adjust(64) * 2, scrX / 2, adjust(64), TRUE);
   SendMessageW(hInput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
-  MoveWindow(hOutput, scrX / 2, scrY + topPadding - adjust(64) - adjust(64), scrX - scrX / 2,
-             adjust(64), TRUE);
+  MoveWindow(hOutput, scrX / 2, scrY + topPadding - adjust(64) * 2, scrX - scrX / 2, adjust(64),
+             TRUE);
   SendMessageW(hOutput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
   MoveWindow(hMemView, 0, scrY + topPadding - adjust(64), scrX, adjust(64), TRUE);
   SendMessageW(hMemView, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
@@ -405,9 +404,12 @@ void onInitMenuPopup() {
   // Options -> Word wrap
   CheckMenuItem(hMenu, IDM_OPT_WORDWRAP, MF_BYCOMMAND | wordwrap ? MF_CHECKED : MF_UNCHECKED);
 
+  bool undoable = SendMessageW(hEditor, EM_CANUNDO, 0, 0) != 0;
+
   if (state == STATE_INIT) {
     enableMenus(IDM_FILE_NEW, true);
     enableMenus(IDM_FILE_OPEN, true);
+    enableMenus(IDM_EDIT_UNDO, undoable);
     enableMenus(IDM_BF_MEMTYPE_UNSIGNED, true);
     enableMenus(IDM_BF_OUTPUT_HEX, true);
     enableMenus(IDM_BF_INPUT_HEX, true);
@@ -422,6 +424,7 @@ void onInitMenuPopup() {
   } else if (state == STATE_RUN) {
     enableMenus(IDM_FILE_NEW, false);
     enableMenus(IDM_FILE_OPEN, false);
+    enableMenus(IDM_EDIT_UNDO, false);
     enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
     enableMenus(IDM_BF_OUTPUT_HEX, false);
     enableMenus(IDM_BF_INPUT_HEX, false);
@@ -436,6 +439,7 @@ void onInitMenuPopup() {
   } else if (state == STATE_PAUSE || state == STATE_FINISH) {
     enableMenus(IDM_FILE_NEW, false);
     enableMenus(IDM_FILE_OPEN, false);
+    enableMenus(IDM_EDIT_UNDO, false);
     enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
     enableMenus(IDM_BF_OUTPUT_HEX, false);
     enableMenus(IDM_BF_INPUT_HEX, false);
@@ -482,32 +486,57 @@ void paste() { SendMessageW(hFocused, WM_PASTE, 0, 0); }
 
 void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
 
+void undo() { SendMessageW(hEditor, EM_UNDO, 0, 0); }
+
 int messageBox(HWND _hWnd, const wchar_t *_lpText, const wchar_t *_lpCaption, unsigned int _uType) {
-#ifdef UNDER_CE
-  return MessageBoxW(_hWnd, _lpText, _lpCaption, _uType);
-#else
+#ifndef UNDER_CE
   if (taskDialog) {
-    int buttons = (_uType & 0xF) == MB_OK ? 1 : 14, result;
+    // Tests whether _uType uses some features that TaskDialog doesn't support.
+    if (_uType & ~(MB_ICONMASK | MB_TYPEMASK)) goto mbfallback;
+
+    int buttons;
+    switch (_uType & MB_TYPEMASK) {
+      case MB_OK:
+        buttons = 1;
+        break;
+      case MB_OKCANCEL:
+        buttons = 1 + 8;
+        break;
+      case MB_RETRYCANCEL:
+        buttons = 16 + 8;
+        break;
+      case MB_YESNO:
+        buttons = 2 + 4;
+        break;
+      case MB_YESNOCANCEL:
+        buttons = 2 + 4 + 8;
+        break;
+      default:  // Not supported by TaskDialog.
+        goto mbfallback;
+    }
+
     wchar_t *icon;
-    switch (_uType & 0xF0) {
+    switch (_uType & MB_ICONMASK) {
       case 0:
         icon = NULL;
         break;
-      case MB_ICONWARNING:
+      case MB_ICONWARNING:  // Same value as MB_ICONEXCLAMATION.
         icon = MAKEINTRESOURCEW(-1);
         break;
-      case MB_ICONERROR:
+      case MB_ICONERROR:  // Same value as MB_ICONSTOP and MB_ICONHAND.
         icon = MAKEINTRESOURCEW(-2);
         break;
-      default:
+      default:  // Fallbacks everything else for Information icon.
         icon = MAKEINTRESOURCEW(-3);
     }
+
+    int result;
     taskDialog(_hWnd, hInst, _lpCaption, L"", _lpText, buttons, icon, &result);
     return result;
-  } else {
-    return MessageBoxW(_hWnd, _lpText, _lpCaption, _uType);
   }
+mbfallback:
 #endif
+  return MessageBoxW(_hWnd, _lpText, _lpCaption, _uType);
 }
 
 // Hook window procedure for the edit control in the memory view options dialog.
@@ -936,7 +965,8 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
     delete[] fileBuf;
     return;
   }
-  wchar_t *wcFileBuf = new wchar_t[length + 1]();
+  wchar_t *wcFileBuf = new wchar_t[length + 1];
+  wcFileBuf[length] = 0;
   MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, wcFileBuf, length);
   delete[] fileBuf;
 

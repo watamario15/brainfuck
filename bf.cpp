@@ -4,20 +4,18 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-
-#include <cstring>
-#include <stdexcept>
-#include <vector>
+#include <string.h>
 
 void Brainfuck::reset() {
   progIndex = 0;
   inIndex = 0;
-  memory.clear();
-  memory.push_back(0);
+  memset(memory, 0, sizeof(memory));
   memIndex = 0;
+  memLen = 1;
 }
 
-void Brainfuck::reset(size_t _progLen, const wchar_t *_program, size_t _inLen, const void *_input) {
+void Brainfuck::reset(unsigned _progLen, const wchar_t *_program, unsigned _inLen,
+                      const void *_input) {
   if (_progLen == 0 || !_program) {
     program = NULL;
     progLen = 0;
@@ -36,9 +34,9 @@ void Brainfuck::reset(size_t _progLen, const wchar_t *_program, size_t _inLen, c
   }
   inIndex = 0;
 
-  memory.clear();
-  memory.push_back(0);
+  memset(memory, 0, sizeof(memory));
   memIndex = 0;
+  memLen = 1;
 }
 
 void Brainfuck::setBehavior(enum noinput_t _noInput, bool _wrapInt, bool _signedness, bool _debug) {
@@ -58,13 +56,12 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
 
   switch (program[progIndex]) {
     case L'>':
-      if (memIndex != memory.max_size() - 1) {
+      if (memIndex != 65535) {
         ++memIndex;
-        if (memory.size() == memIndex) memory.push_back(0);
+        if (memIndex == memLen) ++memLen;
       } else {
-        wsprintfW(lastError,
-                  L"%lu: Instruction '>' used when the memory pointer is std::vector::max_size.",
-                  (unsigned long)progIndex);
+        wsprintfW(lastError, L"%u: Instruction '>' used when the memory pointer is 65535.",
+                  progIndex);
         return RESULT_ERR;
       }
       break;
@@ -73,8 +70,7 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
       if (memIndex != 0) {
         --memIndex;
       } else {
-        wsprintfW(lastError, L"%lu: Instruction '<' used when the memory pointer is 0.",
-                  (unsigned long)progIndex);
+        wsprintfW(lastError, L"%u: Instruction '<' used when the memory pointer is 0.", progIndex);
         return RESULT_ERR;
       }
       break;
@@ -87,16 +83,16 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
         if (memory[memIndex] != 0x7F) {
           ++memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%lu: Instruction '+' used when the pointed memory is 127.",
-                    (unsigned long)progIndex);
+          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 127.",
+                    progIndex);
           return RESULT_ERR;
         }
       } else {
         if (memory[memIndex] != 0xFF) {
           ++memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%lu: Instruction '+' used when the pointed memory is 255.",
-                    (unsigned long)progIndex);
+          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 255.",
+                    progIndex);
           return RESULT_ERR;
         }
       }
@@ -110,16 +106,16 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
         if (memory[memIndex] != 0x80) {
           --memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%lu: Instruction '-' used when the pointed memory is -128.",
-                    (unsigned long)progIndex);
+          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is -128.",
+                    progIndex);
           return RESULT_ERR;
         }
       } else {
         if (memory[memIndex] != 0x00) {
           --memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%lu: Instruction '-' used when the pointed memory is 0.",
-                    (unsigned long)progIndex);
+          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is 0.",
+                    progIndex);
           return RESULT_ERR;
         }
       }
@@ -137,8 +133,8 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
         } else if (noInput == NOINPUT_FF) {
           memory[memIndex] = 255;
         } else {
-          wsprintfW(lastError, L"%lu: Instruction ',' used when the input stream is empty.",
-                    (unsigned long)progIndex);
+          wsprintfW(lastError, L"%u: Instruction ',' used when the input stream is empty.",
+                    progIndex);
           return RESULT_ERR;
         }
       } else {
@@ -150,10 +146,10 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
     case L'[':
       if (memory[memIndex] == 0) {
         if (progIndex == progLen - 1) {
-          wsprintfW(lastError, L"%lu: No matching closing bracket.", (unsigned long)progIndex);
+          wsprintfW(lastError, L"%u: No matching closing bracket.", progIndex);
           return RESULT_ERR;
         }
-        size_t nextIndex = progIndex + 1, ketCnt = 0;
+        unsigned nextIndex = progIndex + 1, ketCnt = 0;
         while (true) {
           if (program[nextIndex] == L']') {
             if (ketCnt == 0) {
@@ -164,7 +160,7 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
           }
           if (program[nextIndex] == L'[') ketCnt++;
           if (nextIndex == progLen - 1) {
-            wsprintfW(lastError, L"%lu: No matching closing bracket.", (unsigned long)progIndex);
+            wsprintfW(lastError, L"%u: No matching closing bracket.", progIndex);
             return RESULT_ERR;
           }
           ++nextIndex;
@@ -176,10 +172,10 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
     case L']':
       if (memory[memIndex] != 0) {
         if (progIndex == 0) {
-          wsprintfW(lastError, L"%lu: No matching opening bracket.", (unsigned long)progIndex);
+          wsprintfW(lastError, L"%u: No matching opening bracket.", progIndex);
           return RESULT_ERR;
         }
-        size_t nextIndex = progIndex - 1, braCnt = 0;
+        unsigned nextIndex = progIndex - 1, braCnt = 0;
         while (true) {
           if (program[nextIndex] == L'[') {
             if (braCnt == 0) {

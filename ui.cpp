@@ -32,7 +32,7 @@ typedef enum MONITOR_DPI_TYPE {
 
 // Function pointer type for GetDpiForMonitor API.
 typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType,
-                                              unsigned int *dpiX, unsigned int *dpiY);
+                                              unsigned *dpiX, unsigned *dpiY);
 
 // Function pointer type for TaskDialog API.
 typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance,
@@ -69,8 +69,8 @@ static HWND hEditor, hInput, hOutput, hMemView, hFocused, hCmdBtn[CMDBTN_LEN], h
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
 static LOGFONTW editFont;
-static int topPadding = 0, scrX = 480, scrY = 320;
-static unsigned int memViewStart = 0;
+static int topPadding = 0;
+static unsigned memViewStart = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
 static std::wstring wstrFileName;
 static bool withBOM = false, wordwrap = true;
@@ -151,8 +151,8 @@ static enum newline_t convertCRLF(std::wstring &_target, enum newline_t _newLine
 }
 
 // Enables/Disables menu items from the smaller nearest 10 multiple to `_endID`.
-static void enableMenus(unsigned int _endID, bool _enable) {
-  unsigned int i;
+static void enableMenus(unsigned _endID, bool _enable) {
+  unsigned i;
   for (i = (_endID / 10) * 10; i <= _endID; ++i) {
     EnableMenuItem(hMenu, i, MF_BYCOMMAND | (_enable ? MF_ENABLED : MF_GRAYED));
   }
@@ -263,7 +263,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
 
   // Tests whether it successfully got the GetDpiForMonitor API.
   if (getDpiForMonitor) {  // It got (the system is presumably Windows 8.1 or later).
-    unsigned int tmpX, tmpY;
+    unsigned tmpX, tmpY;
     getDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &tmpX,
                      &tmpY);
     dpi = tmpX;
@@ -309,9 +309,6 @@ void onSize() {
 
   size_t i;
   LOGFONTW rLogfont;
-  GetClientRect(hWnd, &rect);
-  scrX = rect.right;
-  scrY = rect.bottom;
 
   // Button font
   ZeroMemory(&rLogfont, sizeof(rLogfont));
@@ -346,14 +343,15 @@ void onSize() {
   }
 
   int topEditor = topPadding + adjust(32);
+  GetClientRect(hWnd, &rect);
+  int scrX = rect.right, scrY = rect.bottom;
+  int halfY = (scrY - topEditor) / 2, centerY = (scrY + topEditor) / 2;
   if (horizontal) {
-    int halfY = (scrY - topEditor) / 2;
     MoveWindow(hEditor, 0, topEditor, scrX / 3, scrY - topEditor, TRUE);
     MoveWindow(hInput, scrX / 3, topEditor, scrX / 3, halfY, TRUE);
     MoveWindow(hOutput, scrX / 3, halfY + topEditor, scrX / 3, scrY - halfY - topEditor, TRUE);
     MoveWindow(hMemView, scrX * 2 / 3, topEditor, scrX - scrX * 2 / 3, scrY - topEditor, TRUE);
   } else {
-    int halfY = (scrY - topEditor) / 2, centerY = (scrY + topEditor) / 2;
     MoveWindow(hEditor, 0, topEditor, scrX, halfY, TRUE);
     MoveWindow(hInput, 0, centerY, scrX / 2, halfY / 2, TRUE);
     MoveWindow(hOutput, scrX / 2, centerY, scrX - scrX / 2, halfY / 2, TRUE);
@@ -498,7 +496,7 @@ void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
 
 void undo() { SendMessageW(hEditor, EM_UNDO, 0, 0); }
 
-int messageBox(HWND _hWnd, const wchar_t *_lpText, const wchar_t *_lpCaption, unsigned int _uType) {
+int messageBox(HWND _hWnd, const wchar_t *_lpText, const wchar_t *_lpCaption, unsigned _uType) {
 #ifndef UNDER_CE
   if (taskDialog) {
     // Tests whether _uType uses some features that TaskDialog doesn't support.
@@ -552,8 +550,7 @@ mbfallback:
 // Hook window procedure for the edit control in the memory view options dialog.
 // This procedure translates top row character keys to numbers according to the keyboard layout of
 // SHARP Brain.
-static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, unsigned int uMsg, WPARAM wParam,
-                                         LPARAM lParam) {
+static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam) {
   static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
 
   switch (uMsg) {
@@ -610,7 +607,7 @@ static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, unsigned int uMsg, WPARAM wP
 }
 
 // Window procedure for the memory view options dialog.
-INT_PTR CALLBACK memViewProc(HWND hDlg, unsigned int uMsg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK memViewProc(HWND hDlg, unsigned uMsg, WPARAM wParam, LPARAM lParam) {
   UNREFERENCED_PARAMETER(lParam);
 
   switch (uMsg) {
@@ -737,24 +734,24 @@ void updateFocus(int _id) {
   }
 }
 
-void selProg(unsigned int _progPtr) { SendMessageW(hEditor, EM_SETSEL, _progPtr, _progPtr + 1); }
+void selProg(unsigned _progPtr) { SendMessageW(hEditor, EM_SETSEL, _progPtr, _progPtr + 1); }
 
-void selMemView(unsigned int _memPtr) {
+void selMemView(unsigned _memPtr) {
   SendMessageW(hMemView, EM_SETSEL, (_memPtr - memViewStart) * 3, (_memPtr - memViewStart) * 3 + 2);
 }
 
-void setMemory(const std::vector<unsigned char> *memory) {
+void setMemory(const unsigned char *memory, unsigned size) {
   if (!memory) {
     SetWindowTextW(hMemView, NULL);
     return;
   }
 
-  unsigned int i;
+  unsigned i;
   std::wstring wstrOut;
-  for (i = memViewStart; i < memViewStart + 100 && i < memory->size(); ++i) {
+  for (i = memViewStart; i < memViewStart + 100 && i < size; ++i) {
     // Converts to a hexadecimal string.
     wchar_t wcOut[] = {0, 0, L' ', 0};
-    unsigned char high = memory->at(i) >> 4, low = memory->at(i) & 0xF;
+    unsigned char high = memory[i] >> 4, low = memory[i] & 0xF;
     if (high < 10) {
       wcOut[0] = L'0' + high;
     } else {

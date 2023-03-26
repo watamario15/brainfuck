@@ -10,7 +10,7 @@ Default options are shown in **bold** typeface. For I/O charset, UTF-8 is defaul
 |Item|Spec|
 |:-:|:-:|
 |Memory type|**8-bit two's-complement integer (-128 to 127)**, 8-bit integer (0 to 255)|
-|Memory length|**infinity (your device's memory capacity)**|
+|Memory length|**65,536 bytes**|
 |I/O charset|**ASCII, UTF-8**, Shift\_JIS|
 |Input error|**input 0**, input FF, error|
 |Integer overflow|**wrap around**, error|

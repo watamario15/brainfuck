@@ -1,5 +1,4 @@
-#include <stdexcept>
-#include <vector>
+#include <string>
 
 #ifndef _UNICODE
 #define _UNICODE
@@ -72,7 +71,7 @@ static class Brainfuck *g_bf;
 static unsigned int g_timerID = 0;
 static wchar_t *g_cmdLine;
 static bool g_prevCR = false;
-static std::vector<unsigned char> g_outBuf;
+static std::string g_outBuf;
 static HANDLE g_hThread = NULL;
 static volatile enum ctrlthread_t g_ctrlThread = CTRLTHREAD_RUN;
 
@@ -83,19 +82,19 @@ static inline bool isHex(wchar_t chr) {
 
 // Initializes the Brainfuck module. Returns false on an invalid hexadecimal input.
 static bool bfInit() {
-  static std::vector<unsigned char> vecIn;
-  static unsigned char *input = NULL;
+  static std::string inBuf;
+  static const char *input = NULL;
 
   ui::setOutput(L"");
   ui::setMemory(NULL);
-  g_outBuf.clear();
+  g_outBuf = "";
   g_prevCR = false;
   int inLen;
   wchar_t *wcInput = ui::getInput();
-  // We shouldn't delete when vecIn isn't empty, as it means input is allocated by vecIn.
-  if (input && vecIn.empty()) delete[] input;
+  // We shouldn't delete when inBuf isn't empty, as it means input is allocated by inBuf.
+  if (input && inBuf.empty()) delete[] (char *)input;
   input = NULL;
-  vecIn.clear();
+  inBuf = "";
 
   if (ui::inCharSet == IDM_BF_INPUT_HEX) {
     // Converts the hexadecimal input.
@@ -113,21 +112,21 @@ static bool bfInit() {
       } else if (iswspace(wcInput[i]) || !wcInput[i]) {
         if (hexLen == 1) {
           if (hex[0] < L'A') {
-            vecIn.push_back(hex[0] - L'0');
+            inBuf += (char)(hex[0] - L'0');
           } else {
-            vecIn.push_back(hex[0] - L'A' + 10);
+            inBuf += (char)(hex[0] - L'A' + 10);
           }
           hexLen = 0;
         } else if (hexLen == 2) {
           if (hex[0] < L'A') {
-            vecIn.push_back((hex[0] - L'0') << 4);
+            inBuf += (char)((hex[0] - L'0') << 4);
           } else {
-            vecIn.push_back((hex[0] - L'A' + 10) << 4);
+            inBuf += (char)((hex[0] - L'A' + 10) << 4);
           }
           if (hex[1] < L'A') {
-            vecIn.back() += hex[1] - L'0';
+            inBuf[inBuf.size() - 1] += hex[1] - L'0';
           } else {
-            vecIn.back() += hex[1] - L'A' + 10;
+            inBuf[inBuf.size() - 1] += hex[1] - L'A' + 10;
           }
           hexLen = 0;
         }
@@ -137,13 +136,16 @@ static bool bfInit() {
 
       if (wcInput[i] == L'\0') break;
     }
-    input = vecIn.empty() ? NULL : &vecIn.front();
-    inLen = (int)vecIn.size();
+
+    input = inBuf.empty() ? NULL : inBuf.c_str();
+    inLen = (int)inBuf.size();
   } else {
     int codePage = (ui::inCharSet == IDM_BF_INPUT_SJIS) ? 932 : CP_UTF8;
-    inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)NULL, 0, NULL, NULL);
-    input = new unsigned char[inLen];
-    WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)input, inLen, NULL, NULL);
+    inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, NULL, 0, NULL, NULL);
+    char *converted = new char[inLen];
+    WideCharToMultiByte(codePage, 0, wcInput, -1, converted, inLen, NULL, NULL);
+
+    input = converted;
     inLen--;
   }
 
@@ -155,11 +157,11 @@ static bool bfInit() {
 
 // Executes the next instruction.
 static enum Brainfuck::result_t bfNext() {
-  unsigned char output;
+  char output;
   bool didOutput;
   g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::breakpoint);
 
-  enum Brainfuck::result_t result = g_bf->next(&output, &didOutput);
+  enum Brainfuck::result_t result = g_bf->next((unsigned char *)&output, &didOutput);
   if (result == Brainfuck::RESULT_ERR) {
     if (g_timerID) {
       timeKillEvent(g_timerID);
@@ -173,12 +175,10 @@ static enum Brainfuck::result_t bfNext() {
   if (result == Brainfuck::RESULT_FIN) {
     if (!g_outBuf.empty()) {
       int codePage = (ui::outCharSet == IDM_BF_OUTPUT_SJIS) ? 932 : CP_UTF8;
-      if (g_outBuf.back() != 0) g_outBuf.push_back(0);  // null terminator
-      int outLen = MultiByteToWideChar(codePage, 0, (char *)&g_outBuf.front(), (int)g_outBuf.size(),
+      int outLen = MultiByteToWideChar(codePage, 0, g_outBuf.c_str(), (int)g_outBuf.size() + 1,
                                        (wchar_t *)NULL, 0);
       wchar_t *wcOut = new wchar_t[outLen];
-      MultiByteToWideChar(codePage, 0, (char *)&g_outBuf.front(), (int)g_outBuf.size(), wcOut,
-                          outLen);
+      MultiByteToWideChar(codePage, 0, g_outBuf.c_str(), (int)g_outBuf.size() + 1, wcOut, outLen);
       ui::setOutput(wcOut);
       delete[] wcOut;
     }
@@ -209,9 +209,10 @@ static enum Brainfuck::result_t bfNext() {
         ui::appendOutput(wcOut);
       } else {
         // Align newlines to CRLF.
-        if (g_prevCR && output != '\n') g_outBuf.push_back('\n');
-        if (!g_prevCR && output == '\n') g_outBuf.push_back('\r');
-        g_outBuf.push_back(output);
+        if (g_prevCR && output != '\n') g_outBuf += '\n';
+        if (!g_prevCR && output == '\n') g_outBuf += '\r';
+        g_prevCR = output == L'\r';
+        g_outBuf += output;
       }
     }
   }
@@ -244,8 +245,10 @@ tret_t WINAPI threadRunner(void *lpParameter) {
     if (ui::speed != 0) WaitForSingleObject(hEvent, INFINITE);
     if ((result = bfNext()) != Brainfuck::RESULT_RUN) break;
     if (ui::debug) {
-      ui::setMemory(&g_bf->getMemory());
-      ui::selProg((int)g_bf->getProgPtr());
+      unsigned size;
+      const unsigned char *memory = g_bf->getMemory(&size);
+      ui::setMemory(memory, size);
+      ui::selProg(g_bf->getProgPtr());
     }
   }
 
@@ -261,8 +264,10 @@ tret_t WINAPI threadRunner(void *lpParameter) {
     if (g_ctrlThread == CTRLTHREAD_RUN) {  // Finished or error
       ui::setState(result == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
     }
-    ui::setMemory(&g_bf->getMemory());
-    ui::selProg((int)g_bf->getProgPtr());
+    unsigned size;
+    const unsigned char *memory = g_bf->getMemory(&size);
+    ui::setMemory(memory, size);
+    ui::selProg(g_bf->getProgPtr());
   }
 
   PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
@@ -371,7 +376,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
           ui::setState(ui::STATE_RUN);
           break;
 
-        case IDC_CMDBTN_FIRST + 1:  // Next
+        case IDC_CMDBTN_FIRST + 1: {  // Next
           if (!didInit) {
             if (!bfInit()) {
               ui::messageBox(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
@@ -381,9 +386,12 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
           }
 
           ui::setState(bfNext() == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
-          ui::setMemory(&g_bf->getMemory());
-          ui::selProg((int)g_bf->getProgPtr());
+          unsigned size;
+          const unsigned char *memory = g_bf->getMemory(&size);
+          ui::setMemory(memory, size);
+          ui::selProg(g_bf->getProgPtr());
           break;
+        }
 
         case IDC_CMDBTN_FIRST + 2:  // Pause
           if (g_hThread) g_ctrlThread = CTRLTHREAD_PAUSE;
@@ -520,7 +528,9 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
         case IDM_OPT_MEMVIEW:
           if (DialogBoxW(ui::hInst, L"memviewopt", hWnd, ui::memViewProc) == IDOK &&
               ui::state != ui::STATE_INIT) {
-            ui::setMemory(&g_bf->getMemory());
+            unsigned size;
+            const unsigned char *memory = g_bf->getMemory(&size);
+            ui::setMemory(memory, size);
           }
           break;
 
@@ -529,11 +539,11 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
           break;
 
         case IDM_OPT_HLTPROG:
-          ui::selProg((int)g_bf->getProgPtr());
+          ui::selProg(g_bf->getProgPtr());
           break;
 
         case IDM_OPT_HLTMEM:
-          ui::selMemView((int)g_bf->getMemPtr());
+          ui::selMemView(g_bf->getMemPtr());
           break;
 
         case IDM_OPT_DARK:

@@ -6,8 +6,6 @@
 
 #include <stddef.h>
 
-#include <vector>
-
 class Brainfuck {
  public:
   // Defines a desired behavior for input instructions with no input.
@@ -20,6 +18,7 @@ class Brainfuck {
   Brainfuck()
       : program(NULL),
         input(NULL),
+        memLen(1),
         wrapInt(true),
         signedness(true),
         debug(false),
@@ -29,9 +28,10 @@ class Brainfuck {
 
   // Initializes the internal state and sets `_program` and `_input`.
   // DO NOT CHANGE THE CONTENTS OF THEM. You must call reset() when you update them.
-  Brainfuck(size_t _progLen, const wchar_t *_program, size_t _inLen, const void *_input)
+  Brainfuck(unsigned _progLen, const wchar_t *_program, unsigned _inLen, const void *_input)
       : program(NULL),
         input(NULL),
+        memLen(1),
         wrapInt(true),
         signedness(true),
         debug(false),
@@ -44,7 +44,7 @@ class Brainfuck {
 
   // Resets the internal state and copies `_program` and `_input`.
   // DO NOT CHANGE THE CONTENTS OF THEM. You must call reset() when you update them.
-  void reset(size_t _progLen, const wchar_t *_program, size_t _inLen, const void *_input);
+  void reset(unsigned _progLen, const wchar_t *_program, unsigned _inLen, const void *_input);
 
   // Change implementation-defined behaviors.
   // When wrapInt is false, `next` throws an exception on an overflow/underflow.
@@ -61,23 +61,26 @@ class Brainfuck {
   enum result_t next(unsigned char *_output, bool *_didOutput);
 
   // Returns the memory. The returned content becomes invalid on reset/next.
-  const std::vector<unsigned char> &getMemory() { return memory; }
+  const unsigned char *getMemory(unsigned *_size) {
+    *_size = memLen;
+    return memory;
+  }
 
   // Returns the memory pointer.
-  size_t getMemPtr() { return memIndex; }
+  unsigned getMemPtr() { return memIndex; }
 
   // Returns the program pointer.
-  size_t getProgPtr() { return progIndex; }
+  unsigned getProgPtr() { return progIndex; }
 
   // Returns the last error.
   const wchar_t *getLastError() { return lastError; }
 
  private:
   // All initializations are in constructor, as old C++ doesn't allow them on the declaration.
-  const wchar_t *program;             // Program
-  const unsigned char *input;         // Input stream
-  std::vector<unsigned char> memory;  // Memory
-  size_t memIndex, progIndex, inIndex, progLen, inLen;
+  const wchar_t *program;       // Program
+  const unsigned char *input;   // Input stream
+  unsigned char memory[65536];  // Memory
+  unsigned memIndex, progIndex, inIndex, progLen, inLen, memLen;
   bool wrapInt, signedness, debug;
   enum noinput_t noInput;
   wchar_t lastError[128];

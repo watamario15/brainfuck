@@ -71,7 +71,7 @@ void setOutput(const wchar_t *_str);
 void appendOutput(const wchar_t *_str);
 
 // Sets memory. Clears the memory view when NULL is given.
-void setMemory(const std::vector<unsigned char> *memory);
+void setMemory(const unsigned char *memory, unsigned size = 0);
 
 // Switches between wordwrap enabled and disabled for edit controls.
 void switchWordwrap();

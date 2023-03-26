@@ -54,7 +54,7 @@ void selProg(unsigned int _progPtr);
 void selMemView(unsigned int _memPtr);
 
 // Memory view settings dialog.
-INT_PTR CALLBACK memViewProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK memViewProc(HWND hwndDlg, unsigned int uMsg, WPARAM wParam, LPARAM lParam);
 
 // Retrieves the editor content to the returned buffer.
 // Previously returned pointer gets invalidated on each call.
@@ -78,6 +78,9 @@ void switchWordwrap();
 
 // Switches between dark/light theme.
 void switchTheme();
+
+// Switches between horizontal/portrait layout.
+void switchLayout();
 
 // Opens a font dialog and applies it on editors.
 void chooseFont();

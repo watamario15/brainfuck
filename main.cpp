@@ -18,7 +18,7 @@
 #endif
 
 #ifdef UNDER_CE
-// Workaround for wrong macro definitions of CeGCC.
+// Workaround for wrong macro definitions in CeGCC.
 #if SW_MAXIMIZE != 12
 #undef SW_MAXIMIZE
 #define SW_MAXIMIZE 12
@@ -43,7 +43,7 @@
 #define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
   CreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
 
-// Return type for thread functions.
+// The return type of a thread function.
 typedef DWORD tret_t;
 
 #include <commctrl.h>
@@ -55,7 +55,7 @@ typedef DWORD tret_t;
 #define myCreateThread(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread) \
   (HANDLE) _beginthreadex(lpsa, cbStack, lpStartAddr, lpvThreadParam, fdwCreate, lpIDThread)
 
-// Return type for thread functions
+// The return type of a thread function.
 typedef unsigned int tret_t;
 #endif
 
@@ -157,22 +157,16 @@ static bool bfInit() {
 static enum Brainfuck::result_t bfNext() {
   unsigned char output;
   bool didOutput;
-  enum Brainfuck::result_t result;
   g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::breakpoint);
 
-  try {
-    result = g_bf->next(&output, &didOutput);
-  } catch (std::invalid_argument const &ex) {
+  enum Brainfuck::result_t result = g_bf->next(&output, &didOutput);
+  if (result == Brainfuck::RESULT_ERR) {
     if (g_timerID) {
       timeKillEvent(g_timerID);
       timeEndPeriod(ui::speed);
       g_timerID = 0;
     }
-    int exLen = MultiByteToWideChar(CP_UTF8, 0, ex.what(), -1, (wchar_t *)NULL, 0);
-    wchar_t *wcException = new wchar_t[exLen];
-    MultiByteToWideChar(CP_UTF8, 0, ex.what(), -1, wcException, exLen);
-    ui::messageBox(ui::hWnd, wcException, L"Error", MB_ICONWARNING);
-    delete[] wcException;
+    ui::messageBox(ui::hWnd, g_bf->getLastError(), L"Error", MB_ICONWARNING);
     result = Brainfuck::RESULT_FIN;
   }
 
@@ -226,7 +220,7 @@ static enum Brainfuck::result_t bfNext() {
 }
 
 // Executes an Brainfuck program until it completes.
-tret_t WINAPI threadRunner(LPVOID lpParameter) {
+tret_t WINAPI threadRunner(void *lpParameter) {
   UNREFERENCED_PARAMETER(lpParameter);
 
   HANDLE hEvent = 0;
@@ -238,7 +232,7 @@ tret_t WINAPI threadRunner(LPVOID lpParameter) {
     }
     if (!g_timerID) {
       ui::messageBox(ui::hWnd, L"This speed is not supported on your device. Try slowing down.",
-                  L"Error", MB_ICONERROR);
+                     L"Error", MB_ICONERROR);
       ui::setState(ui::STATE_INIT);
       PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
       return 1;
@@ -275,7 +269,7 @@ tret_t WINAPI threadRunner(LPVOID lpParameter) {
   return 0;
 }
 
-static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPARAM lParam) {
   static bool didInit = false;
   static HBRUSH BGDark = CreateSolidBrush(0x3f3936);
 
@@ -425,7 +419,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case IDM_FILE_EXIT:
           SendMessageW(hWnd, WM_CLOSE, 0, 0);
           break;
-        
+
         case IDM_EDIT_UNDO:
           ui::undo();
           break;
@@ -546,6 +540,10 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           ui::switchTheme();
           break;
 
+        case IDM_OPT_LAYOUT:
+          ui::switchLayout();
+          break;
+
         case IDM_OPT_FONT:
           ui::chooseFont();
           break;
@@ -566,7 +564,8 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           break;
 
         default:
-          if (LOWORD(wParam) >= IDC_SCRKBD_FIRST && LOWORD(wParam) < IDC_SCRKBD_FIRST + SCRKBD_LEN) {
+          if (LOWORD(wParam) >= IDC_SCRKBD_FIRST &&
+              LOWORD(wParam) < IDC_SCRKBD_FIRST + SCRKBD_LEN) {
             ui::onScreenKeyboard(LOWORD(wParam) - IDC_SCRKBD_FIRST);
           }
       }
@@ -579,7 +578,8 @@ static LRESULT CALLBACK wndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   return 0;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nShowCmd) {
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t *lpCmdLine,
+                    int nShowCmd) {
   size_t i;
   UNREFERENCED_PARAMETER(hPrevInstance);
 

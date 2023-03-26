@@ -57,8 +57,9 @@
 #define IDM_OPT_HLTPROG 430
 #define IDM_OPT_HLTMEM 440
 #define IDM_OPT_DARK 450
-#define IDM_OPT_FONT 460
-#define IDM_OPT_WORDWRAP 470
+#define IDM_OPT_LAYOUT 460
+#define IDM_OPT_FONT 470
+#define IDM_OPT_WORDWRAP 480
 #define IDM_ABOUT 500
 
 #endif

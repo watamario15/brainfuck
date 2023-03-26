@@ -14,7 +14,7 @@ class Brainfuck {
   enum noinput_t { NOINPUT_ERROR, NOINPUT_ZERO, NOINPUT_FF };
 
   // Execution result returned from the next() function.
-  enum result_t { RESULT_RUN, RESULT_BREAK, RESULT_FIN };
+  enum result_t { RESULT_RUN, RESULT_BREAK, RESULT_FIN, RESULT_ERR };
 
   // Initializes the internal state.
   Brainfuck()
@@ -24,7 +24,6 @@ class Brainfuck {
         signedness(true),
         debug(false),
         noInput(NOINPUT_ZERO) {
-    memory.reserve(1000);
     reset();
   }
 
@@ -37,7 +36,6 @@ class Brainfuck {
         signedness(true),
         debug(false),
         noInput(NOINPUT_ZERO) {
-    memory.reserve(30000);
     reset(_progLen, _program, _inLen, _input);
   }
 
@@ -51,15 +49,15 @@ class Brainfuck {
   // Change implementation-defined behaviors.
   // When wrapInt is false, `next` throws an exception on an overflow/underflow.
   // When wrapInt is true, signedness doen't have any effect.
-  // When debug is true, breakpoint instruction (@) is enabled.
-  // Default options are, zero for no input, wrap around integer, signed integer (no effect here),
-  // and no debug.
+  // When debug is true, breakpoint instruction ("@") is enabled.
+  // Default options are, zero for no input, wrap around integer, signed integer (no effects in
+  // this case), and no debug.
   void setBehavior(enum noinput_t _noInput = NOINPUT_ZERO, bool _wrapInt = true,
                    bool _signedness = true, bool _debug = false);
 
   // Executes the next code, and writes its output on `output` if any.
-  // A return value is the result of an execution, which is running, breakpoint, and finished.
-  // Throws `std::invalid_argument` when encounters an invalid Brainfuck code.
+  // A return value is the result of an execution, which is running, breakpoint, finished, and
+  // error.
   enum result_t next(unsigned char *_output, bool *_didOutput);
 
   // Returns the memory. The returned content becomes invalid on reset/next.
@@ -71,13 +69,17 @@ class Brainfuck {
   // Returns the program pointer.
   size_t getProgPtr() { return progIndex; }
 
+  // Returns the last error.
+  const wchar_t *getLastError() { return lastError; }
+
  private:
-  // All initializations are in constructor, as old C++ doesn't allow it on a declaration.
+  // All initializations are in constructor, as old C++ doesn't allow them on the declaration.
   const wchar_t *program;             // Program
   const unsigned char *input;         // Input stream
   std::vector<unsigned char> memory;  // Memory
   size_t memIndex, progIndex, inIndex, progLen, inLen;
   bool wrapInt, signedness, debug;
   enum noinput_t noInput;
+  wchar_t lastError[128];
 };
 #endif

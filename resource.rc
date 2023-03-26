@@ -14,24 +14,24 @@ FILEFLAGS       0
 FILEOS          VOS_NT_WINDOWS32
 FILETYPE        VFT_APP
 {
-    BLOCK "StringFileInfo"
+  BLOCK "StringFileInfo"
+  {
+    BLOCK "040904b0"
     {
-        BLOCK "040904b0"
-        {
-            VALUE "CompanyName",      VER_STR_COMPANYNAME
-            VALUE "FileDescription",  VER_STR_DESCRIPTION
-            VALUE "FileVersion",      VER_STR_VERSION
-            VALUE "InternalName",     VER_STR_ORIGINALFILENAME
-            VALUE "LegalCopyright",   VER_STR_COPYRIGHT
-            VALUE "OriginalFileName", VER_STR_ORIGINALFILENAME
-            VALUE "ProductName",      VER_STR_APPNAME
-            VALUE "ProductVersion",   VER_STR_VERSION
-        }
+      VALUE "CompanyName",      VER_STR_COMPANYNAME
+      VALUE "FileDescription",  VER_STR_DESCRIPTION
+      VALUE "FileVersion",      VER_STR_VERSION
+      VALUE "InternalName",     VER_STR_ORIGINALFILENAME
+      VALUE "LegalCopyright",   VER_STR_COPYRIGHT
+      VALUE "OriginalFileName", VER_STR_ORIGINALFILENAME
+      VALUE "ProductName",      VER_STR_APPNAME
+      VALUE "ProductVersion",   VER_STR_VERSION
     }
-    BLOCK "VarFileInfo"
-    {
-        VALUE "Translation", 0x409, 1200
-    }
+  }
+  BLOCK "VarFileInfo"
+  {
+    VALUE "Translation", 0x409, 1200
+  }
 }
 
 
@@ -48,73 +48,74 @@ icon ICON "app.ico"
 
 menu MENU
 {
-    POPUP "&File"
+  POPUP "&File"
+  {
+    MENUITEM "&New", IDM_FILE_NEW
+    MENUITEM "&Open...", IDM_FILE_OPEN
+    MENUITEM "&Save", IDM_FILE_SAVE
+    MENUITEM "Save &As...", IDM_FILE_SAVE_AS
+    MENUITEM "&Exit", IDM_FILE_EXIT
+  }
+  POPUP "&Edit"
+  {
+    MENUITEM "&Undo", IDM_EDIT_UNDO
+    MENUITEM "Cu&t", IDM_EDIT_CUT
+    MENUITEM "&Copy", IDM_EDIT_COPY
+    MENUITEM "&Paste", IDM_EDIT_PASTE
+    MENUITEM "Select &All", IDM_EDIT_SELALL
+  }
+  POPUP "&Brainfuck"
+  {
+    POPUP "&Memory Type"
     {
-        MENUITEM "&New", IDM_FILE_NEW
-        MENUITEM "&Open...", IDM_FILE_OPEN
-        MENUITEM "&Save", IDM_FILE_SAVE
-        MENUITEM "Save &As...", IDM_FILE_SAVE_AS
-        MENUITEM "&Exit", IDM_FILE_EXIT
+      MENUITEM "&Signed (-128 to 127)", IDM_BF_MEMTYPE_SIGNED
+      MENUITEM "&Unsigned (0 to 255)", IDM_BF_MEMTYPE_UNSIGNED
     }
-    POPUP "&Edit"
+    POPUP "&Output Charset"
     {
-        MENUITEM "&Undo", IDM_EDIT_UNDO
-        MENUITEM "Cu&t", IDM_EDIT_CUT
-        MENUITEM "&Copy", IDM_EDIT_COPY
-        MENUITEM "&Paste", IDM_EDIT_PASTE
-        MENUITEM "Select &All", IDM_EDIT_SELALL
+      MENUITEM "&ASCII (Real Time Output)", IDM_BF_OUTPUT_ASCII
+      MENUITEM "&UTF-8 (Bufferred Output)", IDM_BF_OUTPUT_UTF8
+      MENUITEM "Shift_&JIS (Bufferred Output)", IDM_BF_OUTPUT_SJIS
+      MENUITEM "&Hexadecimal (Real Time Output)", IDM_BF_OUTPUT_HEX
     }
-    POPUP "&Brainfuck"
+    POPUP "Input &Charset"
     {
-        POPUP "&Memory type"
-        {
-            MENUITEM "&Signed (-128 to 127)", IDM_BF_MEMTYPE_SIGNED
-            MENUITEM "&Unsigned (0 to 255)", IDM_BF_MEMTYPE_UNSIGNED
-        }
-        POPUP "&Output charset"
-        {
-            MENUITEM "&ASCII (real time output)", IDM_BF_OUTPUT_ASCII
-            MENUITEM "&UTF-8 (bufferred output)", IDM_BF_OUTPUT_UTF8
-            MENUITEM "Shift_&JIS (bufferred output)", IDM_BF_OUTPUT_SJIS
-            MENUITEM "&Hexadecimal (real time output)", IDM_BF_OUTPUT_HEX
-        }
-        POPUP "Input &charset"
-        {
-            MENUITEM "&UTF-8", IDM_BF_INPUT_UTF8
-            MENUITEM "Shift_&JIS", IDM_BF_INPUT_SJIS
-            MENUITEM "&Hexadecimal", IDM_BF_INPUT_HEX
-        }
-        POPUP "&Input instruction"
-        {
-            MENUITEM "&Error on no input", IDM_BF_NOINPUT_ERROR
-            MENUITEM "&Zero on no input", IDM_BF_NOINPUT_ZERO
-            MENUITEM "&FF (-1 or 255) on no input", IDM_BF_NOINPUT_FF
-        }
-        POPUP "Integer &overflow"
-        {
-            MENUITEM "&Error", IDM_BF_INTOVF_ERROR
-            MENUITEM "&Wrap around", IDM_BF_INTOVF_WRAPAROUND
-        }
-        MENUITEM "&Breakpoint instruction (@)", IDM_BF_BREAKPOINT
+      MENUITEM "&UTF-8", IDM_BF_INPUT_UTF8
+      MENUITEM "Shift_&JIS", IDM_BF_INPUT_SJIS
+      MENUITEM "&Hexadecimal", IDM_BF_INPUT_HEX
     }
-    POPUP "&Options"
+    POPUP "&Input Instruction"
     {
-        POPUP "&Speed"
-        {
-            MENUITEM "&Fastest", IDM_OPT_SPEED_FASTEST
-            MENUITEM "1 ms (&o)", IDM_OPT_SPEED_1MS
-            MENUITEM "10 ms (&t)", IDM_OPT_SPEED_10MS
-            MENUITEM "100 ms (&h)", IDM_OPT_SPEED_100MS
-        }
-        MENUITEM "Memory &view...", IDM_OPT_MEMVIEW
-        MENUITEM "&Real time debugging (slow)", IDM_OPT_TRACK
-        MENUITEM "Highlight &program pointer", IDM_OPT_HLTPROG
-        MENUITEM "Highlight &memory pointer", IDM_OPT_HLTMEM
-        MENUITEM "&Dark theme", IDM_OPT_DARK
-        MENUITEM "&Font...", IDM_OPT_FONT
-        MENUITEM "&Word wrap", IDM_OPT_WORDWRAP
+      MENUITEM "&Error When No Input", IDM_BF_NOINPUT_ERROR
+      MENUITEM "&Zero When No Input", IDM_BF_NOINPUT_ZERO
+      MENUITEM "&FF (-1 or 255) When No Input", IDM_BF_NOINPUT_FF
     }
-    MENUITEM "&About", IDM_ABOUT
+    POPUP "Integer &Overflow"
+    {
+      MENUITEM "&Error", IDM_BF_INTOVF_ERROR
+      MENUITEM "&Wrap Around", IDM_BF_INTOVF_WRAPAROUND
+    }
+    MENUITEM "&Breakpoint Instruction (@)", IDM_BF_BREAKPOINT
+  }
+  POPUP "&Options"
+  {
+    POPUP "&Speed"
+    {
+      MENUITEM "&Fastest", IDM_OPT_SPEED_FASTEST
+      MENUITEM "1 ms (&o)", IDM_OPT_SPEED_1MS
+      MENUITEM "10 ms (&t)", IDM_OPT_SPEED_10MS
+      MENUITEM "100 ms (&h)", IDM_OPT_SPEED_100MS
+    }
+    MENUITEM "Memory &View...", IDM_OPT_MEMVIEW
+    MENUITEM "&Real Time Debugging (Slow)", IDM_OPT_TRACK
+    MENUITEM "Highlight &Program Pointer", IDM_OPT_HLTPROG
+    MENUITEM "Highlight &Memory Pointer", IDM_OPT_HLTMEM
+    MENUITEM "Switch &Theme", IDM_OPT_DARK
+    MENUITEM "Switch &Layout", IDM_OPT_LAYOUT
+    MENUITEM "&Font...", IDM_OPT_FONT
+    MENUITEM "&Word Wrap", IDM_OPT_WORDWRAP
+  }
+  MENUITEM "&About", IDM_ABOUT
 }
 
 
@@ -124,7 +125,7 @@ menu MENU
 
 accel ACCELERATORS
 {
-    "^A", IDM_EDIT_SELALL
+  "^A", IDM_EDIT_SELALL
 }
 
 
@@ -143,12 +144,12 @@ FONT 9, "MS Shell Dlg 2"
 CAPTION "Memory view options"
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 {
-   LTEXT "First address of the memory view (0-indexed byte)", -1, 8, 8, 112, 28, SS_NOPREFIX
+  LTEXT "First address of the memory view (0-indexed byte)", -1, 8, 8, 112, 28, SS_NOPREFIX
 #ifdef UNDER_CE  // It already has an OK button on the title bar.
-   EDITTEXT 3, 32, 40, 64, 14, ES_NUMBER
+  EDITTEXT 3, 32, 40, 64, 14, ES_NUMBER
 #else
-   EDITTEXT 3, 8, 40, 64, 14, ES_NUMBER
-   DEFPUSHBUTTON "&OK", IDOK, 80, 40, 40, 14
+  EDITTEXT 3, 8, 40, 64, 14, ES_NUMBER
+  DEFPUSHBUTTON "&OK", IDOK, 80, 40, 40, 14
 #endif
 }
 

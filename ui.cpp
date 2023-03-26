@@ -32,12 +32,14 @@ typedef enum MONITOR_DPI_TYPE {
 
 // Function pointer type for GetDpiForMonitor API.
 typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType,
-                                              UINT *dpiX, UINT *dpiY);
+                                              unsigned int *dpiX, unsigned int *dpiY);
 
 // Function pointer type for TaskDialog API.
-typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance, PCWSTR pszWindowTitle,
-                                         PCWSTR pszMainInstruction, PCWSTR pszContent,
-                                         int dwCommonButtons, PCWSTR pszIcon, int *pnButton);
+typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance,
+                                         const wchar_t *pszWindowTitle,
+                                         const wchar_t *pszMainInstruction,
+                                         const wchar_t *pszContent, int dwCommonButtons,
+                                         const wchar_t *pszIcon, int *pnButton);
 #endif
 
 // Makes SetWindowLongW/GetWindowLongW compatible for both 32-bit and 64-bit system.
@@ -81,13 +83,14 @@ static int dpi = 96, sysDPI = 96;
 #endif
 
 enum state_t state = STATE_INIT;
-bool signedness = true, wrapInt = true, breakpoint = false, debug = true, dark = true;
+bool signedness = true, wrapInt = true, breakpoint = false, debug = true, dark = true,
+     horizontal = false;
 int speed = 10, outCharSet = IDM_BF_OUTPUT_ASCII, inCharSet = IDM_BF_INPUT_UTF8;
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
 HWND hWnd;
 HINSTANCE hInst;
 
-// Translates newline characters from CRLF/LF/CR/LFCR to CRLF/LF/CR.
+// Translates newlines and returns the previous newline code.
 // `_target`: A `std::wstring` to operate on, `_newLine`: A desired newline code.
 static enum newline_t convertCRLF(std::wstring &_target, enum newline_t _newLine) {
   std::wstring::iterator iter = _target.begin();
@@ -308,7 +311,7 @@ void onSize() {
   LOGFONTW rLogfont;
   GetClientRect(hWnd, &rect);
   scrX = rect.right;
-  scrY = rect.bottom - topPadding;
+  scrY = rect.bottom;
 
   // Button font
   ZeroMemory(&rLogfont, sizeof(rLogfont));
@@ -341,14 +344,24 @@ void onSize() {
     SendMessageW(hScrKB[i], WM_SETFONT, (WPARAM)newBtnFont, MAKELPARAM(TRUE, 0));
     curX += adjust(30);
   }
-  MoveWindow(hEditor, 0, topPadding + adjust(32), scrX, scrY - adjust(32) - adjust(64) * 2, TRUE);
+
+  int topEditor = topPadding + adjust(32);
+  if (horizontal) {
+    int halfY = (scrY - topEditor) / 2;
+    MoveWindow(hEditor, 0, topEditor, scrX / 3, scrY - topEditor, TRUE);
+    MoveWindow(hInput, scrX / 3, topEditor, scrX / 3, halfY, TRUE);
+    MoveWindow(hOutput, scrX / 3, halfY + topEditor, scrX / 3, scrY - halfY - topEditor, TRUE);
+    MoveWindow(hMemView, scrX * 2 / 3, topEditor, scrX - scrX * 2 / 3, scrY - topEditor, TRUE);
+  } else {
+    int halfY = (scrY - topEditor) / 2, centerY = (scrY + topEditor) / 2;
+    MoveWindow(hEditor, 0, topEditor, scrX, halfY, TRUE);
+    MoveWindow(hInput, 0, centerY, scrX / 2, halfY / 2, TRUE);
+    MoveWindow(hOutput, scrX / 2, centerY, scrX - scrX / 2, halfY / 2, TRUE);
+    MoveWindow(hMemView, 0, centerY + halfY / 2, scrX, scrY - centerY - halfY / 2, TRUE);
+  }
   SendMessageW(hEditor, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
-  MoveWindow(hInput, 0, scrY + topPadding - adjust(64) * 2, scrX / 2, adjust(64), TRUE);
   SendMessageW(hInput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
-  MoveWindow(hOutput, scrX / 2, scrY + topPadding - adjust(64) * 2, scrX - scrX / 2, adjust(64),
-             TRUE);
   SendMessageW(hOutput, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
-  MoveWindow(hMemView, 0, scrY + topPadding - adjust(64), scrX, adjust(64), TRUE);
   SendMessageW(hMemView, WM_SETFONT, (WPARAM)newEditFont, MAKELPARAM(TRUE, 0));
 
   if (hBtnFont) DeleteObject(hBtnFont);
@@ -359,21 +372,21 @@ void onSize() {
 }
 
 void onInitMenuPopup() {
-  // Brainfuck -> Memory type
+  // Brainfuck -> Memory Type
   CheckMenuRadioItem(hMenu, IDM_BF_MEMTYPE_SIGNED, IDM_BF_MEMTYPE_UNSIGNED,
                      signedness ? IDM_BF_MEMTYPE_SIGNED : IDM_BF_MEMTYPE_UNSIGNED, MF_BYCOMMAND);
 
-  // Brainfuck -> Output charset
+  // Brainfuck -> Output Charset
   CheckMenuRadioItem(hMenu, IDM_BF_OUTPUT_ASCII, IDM_BF_OUTPUT_HEX, outCharSet, MF_BYCOMMAND);
 
-  // Brainfuck -> Input charset
+  // Brainfuck -> Input Charset
   CheckMenuRadioItem(hMenu, IDM_BF_INPUT_UTF8, IDM_BF_INPUT_HEX, inCharSet, MF_BYCOMMAND);
 
-  // Brainfuck -> Input instruction
+  // Brainfuck -> Input Instruction
   CheckMenuRadioItem(hMenu, IDM_BF_NOINPUT_ERROR, IDM_BF_NOINPUT_FF, IDM_BF_NOINPUT_ERROR + noInput,
                      MF_BYCOMMAND);
 
-  // Brainfuck -> Integer overflow
+  // Brainfuck -> Integer Overflow
   CheckMenuRadioItem(hMenu, IDM_BF_INTOVF_ERROR, IDM_BF_INTOVF_WRAPAROUND,
                      wrapInt ? IDM_BF_INTOVF_WRAPAROUND : IDM_BF_INTOVF_ERROR, MF_BYCOMMAND);
 
@@ -398,10 +411,7 @@ void onInitMenuPopup() {
   // Options -> Debug
   CheckMenuItem(hMenu, IDM_OPT_TRACK, MF_BYCOMMAND | debug ? MF_CHECKED : MF_UNCHECKED);
 
-  // Options -> Dark theme
-  CheckMenuItem(hMenu, IDM_OPT_DARK, MF_BYCOMMAND | dark ? MF_CHECKED : MF_UNCHECKED);
-
-  // Options -> Word wrap
+  // Options -> Word Wrap
   CheckMenuItem(hMenu, IDM_OPT_WORDWRAP, MF_BYCOMMAND | wordwrap ? MF_CHECKED : MF_UNCHECKED);
 
   bool undoable = SendMessageW(hEditor, EM_CANUNDO, 0, 0) != 0;
@@ -542,49 +552,50 @@ mbfallback:
 // Hook window procedure for the edit control in the memory view options dialog.
 // This procedure translates top row character keys to numbers according to the keyboard layout of
 // SHARP Brain.
-static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, unsigned int uMsg, WPARAM wParam,
+                                         LPARAM lParam) {
   static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
 
   switch (uMsg) {
     case WM_CHAR:
-      switch ((CHAR)wParam) {
-        case 'q':
+      switch ((wchar_t)wParam) {
+        case L'q':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"1");
           return 0;
 
-        case 'w':
+        case L'w':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"2");
           return 0;
 
-        case 'e':
+        case L'e':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"3");
           return 0;
 
-        case 'r':
+        case L'r':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"4");
           return 0;
 
-        case 't':
+        case L't':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"5");
           return 0;
 
-        case 'y':
+        case L'y':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"6");
           return 0;
 
-        case 'u':
+        case L'u':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"7");
           return 0;
 
-        case 'i':
+        case L'i':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"8");
           return 0;
 
-        case 'o':
+        case L'o':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"9");
           return 0;
 
-        case 'p':
+        case L'p':
           SendMessageW(hWnd, EM_REPLACESEL, 0, (WPARAM)L"0");
           return 0;
       }
@@ -599,7 +610,7 @@ static LRESULT CALLBACK memViewDlgEditor(HWND hWnd, UINT uMsg, WPARAM wParam, LP
 }
 
 // Window procedure for the memory view options dialog.
-INT_PTR CALLBACK memViewProc(HWND hDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+INT_PTR CALLBACK memViewProc(HWND hDlg, unsigned int uMsg, WPARAM wParam, LPARAM lParam) {
   UNREFERENCED_PARAMETER(lParam);
 
   switch (uMsg) {
@@ -846,10 +857,16 @@ void switchWordwrap() {
 void switchTheme() {
   dark = !dark;
 
-  InvalidateRect(hEditor, NULL, FALSE);
-  InvalidateRect(hInput, NULL, FALSE);
-  InvalidateRect(hOutput, NULL, FALSE);
-  InvalidateRect(hMemView, NULL, FALSE);
+  InvalidateRect(hEditor, NULL, TRUE);
+  InvalidateRect(hInput, NULL, TRUE);
+  InvalidateRect(hOutput, NULL, TRUE);
+  InvalidateRect(hMemView, NULL, TRUE);
+}
+
+void switchLayout() {
+  horizontal = !horizontal;
+
+  onSize();
 }
 
 void chooseFont() {

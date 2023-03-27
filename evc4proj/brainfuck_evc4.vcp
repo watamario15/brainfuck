@@ -113,6 +113,7 @@ DEP_CPP_MAIN_=\
 	"..\bf.hpp"\
 	"..\resource.h"\
 	"..\ui.hpp"\
+	"..\util.hpp"\
 	
 # End Source File
 # Begin Source File
@@ -122,6 +123,16 @@ DEP_CPP_UI_CP=\
 	"..\bf.hpp"\
 	"..\resource.h"\
 	"..\ui.hpp"\
+	"..\util.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\util.cpp
+DEP_CPP_UTIL_=\
+	"..\bf.hpp"\
+	"..\ui.hpp"\
+	"..\util.hpp"\
 	
 # End Source File
 # End Group
@@ -139,6 +150,10 @@ SOURCE=..\resource.h
 # Begin Source File
 
 SOURCE=..\ui.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\util.hpp
 # End Source File
 # End Group
 # Begin Group "Resource Files"

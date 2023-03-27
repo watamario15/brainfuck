@@ -56,11 +56,11 @@ void selMemView(unsigned int _memPtr);
 // Memory view settings dialog.
 INT_PTR CALLBACK memViewProc(HWND hwndDlg, unsigned int uMsg, WPARAM wParam, LPARAM lParam);
 
-// Retrieves the editor content to the returned buffer.
+// Retrieves the editor content to the returned buffer. Might fail with NULL.
 // Previously returned pointer gets invalidated on each call.
 wchar_t *getEditor();
 
-// Retrieves the input content to the returned buffer.
+// Retrieves the input content to the returned buffer. Might fail with NULL.
 // Previously returned pointer gets invalidated on each call.
 wchar_t *getInput();
 
@@ -71,7 +71,7 @@ void setOutput(const wchar_t *_str);
 void appendOutput(const wchar_t *_str);
 
 // Sets memory. Clears the memory view when NULL is given.
-void setMemory(const unsigned char *memory, unsigned size = 0);
+void setMemory(const unsigned char *memory, int size = 0);
 
 // Switches between wordwrap enabled and disabled for edit controls.
 void switchWordwrap();

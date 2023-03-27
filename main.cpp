@@ -64,6 +64,7 @@ typedef unsigned int tret_t;
 #include "bf.hpp"
 #include "resource.h"
 #include "ui.hpp"
+#include "util.hpp"
 
 enum ctrlthread_t { CTRLTHREAD_RUN, CTRLTHREAD_PAUSE, CTRLTHREAD_END };
 
@@ -75,81 +76,33 @@ static std::string g_outBuf;
 static HANDLE g_hThread = NULL;
 static volatile enum ctrlthread_t g_ctrlThread = CTRLTHREAD_RUN;
 
-static inline bool isHex(wchar_t chr) {
-  return (chr >= L'0' && chr <= L'9') || (chr >= L'A' && chr <= L'F') ||
-         (chr >= L'a' && chr <= L'f');
-}
-
 // Initializes the Brainfuck module. Returns false on an invalid hexadecimal input.
 static bool bfInit() {
-  static std::string inBuf;
-  static const char *input = NULL;
+  static unsigned char *input = NULL;
 
   ui::setOutput(L"");
   ui::setMemory(NULL);
   g_outBuf = "";
   g_prevCR = false;
+  if (input) free(input);
+
   int inLen;
   wchar_t *wcInput = ui::getInput();
-  // We shouldn't delete when inBuf isn't empty, as it means input is allocated by inBuf.
-  if (input && inBuf.empty()) delete[] (char *)input;
-  input = NULL;
-  inBuf = "";
+  if (!wcInput) return false;
 
   if (ui::inCharSet == IDM_BF_INPUT_HEX) {
-    // Converts the hexadecimal input.
-    wchar_t hex[2];
-    int hexLen = 0;
-    size_t i;
-    for (i = 0; true; ++i) {
-      if (isHex(wcInput[i])) {
-        if (hexLen >= 2) return false;  // Exceeding the 8-bit range.
-        if (wcInput[i] > L'Z') {        // Aligns to the upper case.
-          hex[hexLen++] = wcInput[i] - (L'a' - L'A');
-        } else {
-          hex[hexLen++] = wcInput[i];
-        }
-      } else if (iswspace(wcInput[i]) || !wcInput[i]) {
-        if (hexLen == 1) {
-          if (hex[0] < L'A') {
-            inBuf += (char)(hex[0] - L'0');
-          } else {
-            inBuf += (char)(hex[0] - L'A' + 10);
-          }
-          hexLen = 0;
-        } else if (hexLen == 2) {
-          if (hex[0] < L'A') {
-            inBuf += (char)((hex[0] - L'0') << 4);
-          } else {
-            inBuf += (char)((hex[0] - L'A' + 10) << 4);
-          }
-          if (hex[1] < L'A') {
-            inBuf[inBuf.size() - 1] += hex[1] - L'0';
-          } else {
-            inBuf[inBuf.size() - 1] += hex[1] - L'A' + 10;
-          }
-          hexLen = 0;
-        }
-      } else {
-        return false;  // Invalid hexadecimal input.
-      }
-
-      if (wcInput[i] == L'\0') break;
-    }
-
-    input = inBuf.empty() ? NULL : inBuf.c_str();
-    inLen = (int)inBuf.size();
+    if (!util::parseHex(ui::hWnd, wcInput, &input)) return false;
+    inLen = input ? strlen((char *)input) : 0;
   } else {
     int codePage = (ui::inCharSet == IDM_BF_INPUT_SJIS) ? 932 : CP_UTF8;
     inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, NULL, 0, NULL, NULL);
-    char *converted = new char[inLen];
-    WideCharToMultiByte(codePage, 0, wcInput, -1, converted, inLen, NULL, NULL);
-
-    input = converted;
+    input = (unsigned char *)malloc(inLen);
+    WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)input, inLen, NULL, NULL);
     inLen--;
   }
 
   wchar_t *wcEditor = ui::getEditor();
+  if (!wcEditor) return false;
   g_bf->reset(wcslen(wcEditor), wcEditor, inLen, input);
 
   return true;
@@ -157,11 +110,11 @@ static bool bfInit() {
 
 // Executes the next instruction.
 static enum Brainfuck::result_t bfNext() {
-  char output;
+  unsigned char output;
   bool didOutput;
   g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::breakpoint);
 
-  enum Brainfuck::result_t result = g_bf->next((unsigned char *)&output, &didOutput);
+  enum Brainfuck::result_t result = g_bf->next(&output, &didOutput);
   if (result == Brainfuck::RESULT_ERR) {
     if (g_timerID) {
       timeKillEvent(g_timerID);
@@ -177,10 +130,14 @@ static enum Brainfuck::result_t bfNext() {
       int codePage = (ui::outCharSet == IDM_BF_OUTPUT_SJIS) ? 932 : CP_UTF8;
       int outLen = MultiByteToWideChar(codePage, 0, g_outBuf.c_str(), (int)g_outBuf.size() + 1,
                                        (wchar_t *)NULL, 0);
-      wchar_t *wcOut = new wchar_t[outLen];
-      MultiByteToWideChar(codePage, 0, g_outBuf.c_str(), (int)g_outBuf.size() + 1, wcOut, outLen);
-      ui::setOutput(wcOut);
-      delete[] wcOut;
+      wchar_t *wcOut = (wchar_t *)malloc(sizeof(wchar_t) * outLen);
+      if (!wcOut) {
+        ui::messageBox(ui::hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+      } else {
+        MultiByteToWideChar(codePage, 0, g_outBuf.c_str(), (int)g_outBuf.size() + 1, wcOut, outLen);
+        ui::setOutput(wcOut);
+        free(wcOut);
+      }
     }
   } else {
     if (didOutput) {
@@ -193,19 +150,8 @@ static enum Brainfuck::result_t bfNext() {
         g_prevCR = wcOut[0] == L'\r';
         ui::appendOutput(wcOut);
       } else if (ui::outCharSet == IDM_BF_OUTPUT_HEX) {
-        // Converts the output to a hexadecimal string.
-        wchar_t wcOut[] = {0, 0, L' ', 0};
-        unsigned char high = output >> 4, low = output & 0xF;
-        if (high < 10) {
-          wcOut[0] = L'0' + high;
-        } else {
-          wcOut[0] = L'A' + (high - 10);
-        }
-        if (low < 10) {
-          wcOut[1] = L'0' + low;
-        } else {
-          wcOut[1] = L'A' + (low - 10);
-        }
+        wchar_t wcOut[4];
+        util::toHex(output, wcOut);
         ui::appendOutput(wcOut);
       } else {
         // Align newlines to CRLF.
@@ -357,10 +303,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
       switch (LOWORD(wParam)) {
         case IDC_CMDBTN_FIRST:  // Run
           if (!didInit) {
-            if (!bfInit()) {
-              ui::messageBox(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
-              break;
-            }
+            if (!bfInit()) break;
             didInit = true;
           }
 
@@ -378,10 +321,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
 
         case IDC_CMDBTN_FIRST + 1: {  // Next
           if (!didInit) {
-            if (!bfInit()) {
-              ui::messageBox(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
-              break;
-            }
+            if (!bfInit()) break;
             didInit = true;
           }
 
@@ -590,7 +530,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t *lpCmdLine,
                     int nShowCmd) {
-  size_t i;
+  int i;
   UNREFERENCED_PARAMETER(hPrevInstance);
 
   // Replaces slashes with backslashes.

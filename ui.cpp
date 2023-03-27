@@ -60,21 +60,20 @@ typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance,
 #include "bf.hpp"
 #include "resource.h"
 #include "ui.hpp"
+#include "util.hpp"
 
 namespace ui {
-enum newline_t { NEWLINE_CRLF, NEWLINE_LF, NEWLINE_CR };
 static const wchar_t *wcCmdBtn[CMDBTN_LEN] = {L"Run", L"Next", L"Pause", L"End"},
                      *wcScrKB[SCRKBD_LEN] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]", L"@"};
 static HWND hEditor, hInput, hOutput, hMemView, hFocused, hCmdBtn[CMDBTN_LEN], hScrKB[SCRKBD_LEN];
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
 static LOGFONTW editFont;
-static int topPadding = 0;
-static unsigned memViewStart = 0;
+static int topPadding = 0, memViewStart = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
 static std::wstring wstrFileName;
 static bool withBOM = false, wordwrap = true;
-static enum newline_t newLine = NEWLINE_CRLF;
+static enum util::newline_t newLine = util::NEWLINE_CRLF;
 #ifdef UNDER_CE
 static HWND hCmdBar;
 #else
@@ -89,66 +88,7 @@ int speed = 10, outCharSet = IDM_BF_OUTPUT_ASCII, inCharSet = IDM_BF_INPUT_UTF8;
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
 HWND hWnd;
 HINSTANCE hInst;
-
-// Translates newlines and returns the previous newline code.
-// `_target`: A `std::wstring` to operate on, `_newLine`: A desired newline code.
-static enum newline_t convertCRLF(std::wstring &_target, enum newline_t _newLine) {
-  std::wstring::iterator iter = _target.begin();
-  std::wstring::iterator iterEnd = _target.end();
-  std::wstring temp;
-  const wchar_t *nl;
-  size_t CRs = 0, LFs = 0, CRLFs = 0;
-  if (_newLine == NEWLINE_LF) {
-    nl = L"\n";
-  } else if (_newLine == NEWLINE_CR) {
-    nl = L"\r";
-  } else {
-    nl = L"\r\n";
-  }
-
-  if (0 < _target.size()) {
-    wchar_t bNextChar = *iter++;
-
-    while (true) {
-      if (L'\r' == bNextChar) {
-        temp += nl;                  // Newline
-        if (iter == iterEnd) break;  // EOF
-        bNextChar = *iter++;         // Retrive a character
-        if (L'\n' == bNextChar) {
-          if (iter == iterEnd) break;  // EOF
-          bNextChar = *iter++;         // Retrive a character
-          CRLFs++;
-        } else {
-          CRs++;
-        }
-      } else if (L'\n' == bNextChar) {
-        temp += nl;                    // Newline
-        if (iter == iterEnd) break;    // EOF
-        bNextChar = *iter++;           // Retrive a character
-        if (L'\r' == bNextChar) {      // Broken LFCR, so don't count
-          if (iter == iterEnd) break;  // EOF
-          bNextChar = *iter++;         // Retrive a character
-        } else {
-          LFs++;
-        }
-      } else {
-        temp += bNextChar;           // Not a newline
-        if (iter == iterEnd) break;  // EOF
-        bNextChar = *iter++;         // Retrive a character
-      }
-    }
-  }
-
-  _target = temp;
-
-  if (LFs > CRLFs && LFs >= CRs) {
-    return NEWLINE_LF;
-  } else if (CRs > LFs && CRs > CRLFs) {
-    return NEWLINE_CR;
-  } else {
-    return NEWLINE_CRLF;
-  }
-}
+HMODULE comctl32 = NULL;
 
 // Enables/Disables menu items from the smaller nearest 10 multiple to `_endID`.
 static void enableMenus(unsigned _endID, bool _enable) {
@@ -279,10 +219,9 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
   // Tries to load the TaskDialog API which is a newer substitite of MessageBoxW.
   // This API is per monitor DPI aware but doesn't exist before Windows Vista.
   // To make the system select version 6 comctl32.dll, we don't use the full path here.
-  dll = NULL;
-  dll = LoadLibraryW(L"comctl32.dll");
-  if (dll) {
-    taskDialog = (TaskDialog_t)(void *)GetProcAddress(dll, "TaskDialog");
+  comctl32 = LoadLibraryW(L"comctl32.dll");
+  if (comctl32) {
+    taskDialog = (TaskDialog_t)(void *)GetProcAddress(comctl32, "TaskDialog");
   }
 #endif
 }
@@ -292,6 +231,7 @@ void onDestroy() {
   DeleteObject(hEditFont);
   if (retEditBuf) delete[] retEditBuf;
   if (retInBuf) delete[] retInBuf;
+  if (comctl32) FreeLibrary(comctl32);
 }
 
 void onSize() {
@@ -307,7 +247,7 @@ void onSize() {
   }
 #endif
 
-  size_t i;
+  int i;
   LOGFONTW rLogfont;
 
   // Button font
@@ -658,7 +598,7 @@ INT_PTR CALLBACK memViewProc(HWND hDlg, unsigned uMsg, WPARAM wParam, LPARAM lPa
 }
 
 void setState(enum state_t _state, bool _force) {
-  size_t i;
+  int i;
   if (!_force && _state == state) return;
 
   if (_state == STATE_INIT) {
@@ -740,47 +680,44 @@ void selMemView(unsigned _memPtr) {
   SendMessageW(hMemView, EM_SETSEL, (_memPtr - memViewStart) * 3, (_memPtr - memViewStart) * 3 + 2);
 }
 
-void setMemory(const unsigned char *memory, unsigned size) {
+void setMemory(const unsigned char *memory, int size) {
   if (!memory) {
     SetWindowTextW(hMemView, NULL);
     return;
   }
 
-  unsigned i;
+  int i;
   std::wstring wstrOut;
   for (i = memViewStart; i < memViewStart + 100 && i < size; ++i) {
-    // Converts to a hexadecimal string.
-    wchar_t wcOut[] = {0, 0, L' ', 0};
-    unsigned char high = memory[i] >> 4, low = memory[i] & 0xF;
-    if (high < 10) {
-      wcOut[0] = L'0' + high;
-    } else {
-      wcOut[0] = L'A' + (high - 10);
-    }
-    if (low < 10) {
-      wcOut[1] = L'0' + low;
-    } else {
-      wcOut[1] = L'A' + (low - 10);
-    }
+    wchar_t wcOut[4];
+    util::toHex(memory[i], wcOut);
     wstrOut.append(wcOut);
   }
   SetWindowTextW(hMemView, wstrOut.c_str());
 }
 
 wchar_t *getEditor() {
+  if (retEditBuf) free(retEditBuf);
+
   int editorSize = GetWindowTextLengthW(hEditor) + 1;
-  if (retEditBuf) delete[] retEditBuf;
-  retEditBuf = new wchar_t[editorSize];
-  GetWindowTextW(hEditor, retEditBuf, editorSize);
+  if ((retEditBuf = (wchar_t *)malloc(sizeof(wchar_t) * editorSize))) {
+    GetWindowTextW(hEditor, retEditBuf, editorSize);
+  } else {
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+  }
 
   return retEditBuf;
 }
 
 wchar_t *getInput() {
+  if (retInBuf) free(retInBuf);
+
   int inputSize = GetWindowTextLengthW(hInput) + 1;
-  if (retInBuf) delete[] retInBuf;
-  retInBuf = new wchar_t[inputSize];
-  GetWindowTextW(hInput, retInBuf, inputSize);
+  if ((retInBuf = (wchar_t *)malloc(sizeof(wchar_t) * inputSize))) {
+    GetWindowTextW(hInput, retInBuf, inputSize);
+  } else {
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+  }
 
   return retInBuf;
 }
@@ -794,23 +731,38 @@ void appendOutput(const wchar_t *_str) {
 }
 
 void switchWordwrap() {
-  wordwrap = !wordwrap;
-
   int editorSize = GetWindowTextLengthW(hEditor) + 1;
-  wchar_t *wcEditor = new wchar_t[editorSize];
+  wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
+  if (!wcEditor) {
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    return;
+  }
   GetWindowTextW(hEditor, wcEditor, editorSize);
   bool isModified = SendMessageW(hEditor, EM_GETMODIFY, 0, 0) != 0;
   DestroyWindow(hEditor);
 
   int inputSize = GetWindowTextLengthW(hInput) + 1;
-  wchar_t *wcInput = new wchar_t[inputSize];
+  wchar_t *wcInput = (wchar_t *)malloc(sizeof(wchar_t) * inputSize);
+  if (!wcInput) {
+    free(wcEditor);
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    return;
+  }
   GetWindowTextW(hInput, wcInput, inputSize);
   DestroyWindow(hInput);
 
   int outputSize = GetWindowTextLengthW(hOutput) + 1;
-  wchar_t *wcOutput = new wchar_t[outputSize];
+  wchar_t *wcOutput = (wchar_t *)malloc(sizeof(wchar_t) * outputSize);
+  if (!wcOutput) {
+    free(wcEditor);
+    free(wcInput);
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    return;
+  }
   GetWindowTextW(hOutput, wcOutput, outputSize);
   DestroyWindow(hOutput);
+
+  wordwrap = !wordwrap;
 
   // Program editor
   hEditor =
@@ -846,9 +798,9 @@ void switchWordwrap() {
   SetWindowTextW(hInput, wcInput);
   SetWindowTextW(hOutput, wcOutput);
 
-  delete[] wcEditor;
-  delete[] wcInput;
-  delete[] wcOutput;
+  free(wcEditor);
+  free(wcInput);
+  free(wcOutput);
 }
 
 void switchTheme() {
@@ -937,7 +889,7 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
     SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
     wstrFileName = L"";
     withBOM = false;
-    newLine = NEWLINE_CRLF;
+    newLine = util::NEWLINE_CRLF;
     return;
   }
 
@@ -968,25 +920,37 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   }
 
   DWORD fileSize = GetFileSize(hFile, NULL), readLen;
-  char *fileBuf = new char[fileSize];
-  int padding = 0;
-  ReadFile(hFile, fileBuf, fileSize, &readLen, NULL);
-  CloseHandle(hFile);
-  if (fileBuf[0] == '\xEF' && fileBuf[1] == '\xBB' && fileBuf[2] == '\xBF') padding = 3;  // BOM
-  int length = MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, NULL, 0);
-  if (length >= 0x7FFFFFFE) {
+  if (fileSize >= 65536) {
     messageBox(hWnd, L"This file is too large.", L"Error", MB_ICONWARNING);
-    delete[] fileBuf;
     return;
   }
-  wchar_t *wcFileBuf = new wchar_t[length + 1];
-  wcFileBuf[length] = 0;
+
+  char *fileBuf = (char *)malloc(sizeof(char) * fileSize);
+  if (!fileBuf) {
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    return;
+  }
+
+  ReadFile(hFile, fileBuf, fileSize, &readLen, NULL);
+  CloseHandle(hFile);
+
+  int padding = 0;
+  if (fileBuf[0] == '\xEF' && fileBuf[1] == '\xBB' && fileBuf[2] == '\xBF') padding = 3;  // BOM
+
+  int length = MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, NULL, 0);
+  wchar_t *wcFileBuf = (wchar_t *)calloc(length + 1, sizeof(wchar_t));
+  if (!wcFileBuf) {
+    free(fileBuf);
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    return;
+  }
+
   MultiByteToWideChar(CP_UTF8, 0, fileBuf + padding, readLen - padding, wcFileBuf, length);
-  delete[] fileBuf;
+  free(fileBuf);
 
   std::wstring converted = wcFileBuf;
-  delete[] wcFileBuf;
-  newLine = convertCRLF(converted, NEWLINE_CRLF);
+  free(wcFileBuf);
+  newLine = util::convertCRLF(converted, util::NEWLINE_CRLF);
 
   SetWindowTextW(hEditor, converted.c_str());
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
@@ -1023,14 +987,22 @@ bool saveFile(bool _isOverwrite) {
   }
 
   int editorSize = GetWindowTextLengthW(hEditor) + 1;
-  wchar_t *wcEditor = new wchar_t[editorSize];
+  wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
+  if (!wcEditor) {
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    return false;
+  }
   GetWindowTextW(hEditor, wcEditor, editorSize);
   std::wstring converted = wcEditor;
-  delete[] wcEditor;
+  free(wcEditor);
 
-  if (newLine != NEWLINE_CRLF) convertCRLF(converted, newLine);
+  if (newLine != util::NEWLINE_CRLF) util::convertCRLF(converted, newLine);
   int length = WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, NULL, 0, NULL, NULL);
-  char *szEditor = new char[length];
+  char *szEditor = (char *)malloc(sizeof(char) * length);
+  if (!szEditor) {
+    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    return false;
+  }
   WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, szEditor, length, NULL, NULL);
 
   HANDLE hFile = CreateFileW(wcFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
@@ -1044,7 +1016,7 @@ bool saveFile(bool _isOverwrite) {
   if (withBOM) WriteFile(hFile, "\xEF\xBB\xBF", 3, &dwTemp, NULL);  // BOM
   WriteFile(hFile, szEditor, length - 1, &dwTemp, NULL);
   CloseHandle(hFile);
-  delete[] szEditor;
+  free(szEditor);
 
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
   wstrFileName = wcFileName;

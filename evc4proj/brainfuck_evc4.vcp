@@ -112,8 +112,16 @@ SOURCE=..\main.cpp
 DEP_CPP_MAIN_=\
 	"..\bf.hpp"\
 	"..\resource.h"\
+	"..\tokenizer.hpp"\
 	"..\ui.hpp"\
 	"..\util.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\tokenizer.cpp
+DEP_CPP_TOKEN=\
+	"..\tokenizer.hpp"\
 	
 # End Source File
 # Begin Source File
@@ -146,6 +154,10 @@ SOURCE=..\bf.hpp
 # Begin Source File
 
 SOURCE=..\resource.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\tokenizer.hpp
 # End Source File
 # Begin Source File
 

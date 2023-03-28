@@ -1,5 +1,3 @@
-#include <string>
-
 #ifndef _UNICODE
 #define _UNICODE
 #endif
@@ -65,16 +63,27 @@ typedef unsigned int tret_t;
 #include "resource.h"
 #include "ui.hpp"
 #include "util.hpp"
+#include "tokenizer.hpp"
 
 enum ctrlthread_t { CTRLTHREAD_RUN, CTRLTHREAD_PAUSE, CTRLTHREAD_END };
 
-static class Brainfuck *g_bf;
+static class Brainfuck g_bf;
+static class UTF8Tokenizer g_u8Tokenizer;
+static class SJISTokenizer g_sjisTokenizer;
 static unsigned int g_timerID = 0;
 static wchar_t *g_cmdLine;
 static bool g_prevCR = false;
-static std::string g_outBuf;
 static HANDLE g_hThread = NULL;
 static volatile enum ctrlthread_t g_ctrlThread = CTRLTHREAD_RUN;
+
+// Stops the timer identified by g_timerID if it's not 0
+static inline void stopTimer() {
+  if (g_timerID) {
+    timeKillEvent(g_timerID);
+    timeEndPeriod(ui::speed);
+    g_timerID = 0;
+  }
+}
 
 // Initializes the Brainfuck module. Returns false on an invalid hexadecimal input.
 static bool bfInit() {
@@ -82,7 +91,6 @@ static bool bfInit() {
 
   ui::setOutput(L"");
   ui::setMemory(NULL);
-  g_outBuf = "";
   g_prevCR = false;
   if (input) free(input);
 
@@ -101,9 +109,15 @@ static bool bfInit() {
     inLen--;
   }
 
+  if (ui::outCharSet == IDM_BF_OUTPUT_UTF8) {
+    g_u8Tokenizer.flush();
+  } else if (ui::outCharSet == IDM_BF_OUTPUT_SJIS) {
+    g_sjisTokenizer.flush();
+  }
+
   wchar_t *wcEditor = ui::getEditor();
   if (!wcEditor) return false;
-  g_bf->reset(wcslen(wcEditor), wcEditor, inLen, input);
+  g_bf.reset(wcslen(wcEditor), wcEditor, inLen, input);
 
   return true;
 }
@@ -112,53 +126,41 @@ static bool bfInit() {
 static enum Brainfuck::result_t bfNext() {
   unsigned char output;
   bool didOutput;
-  g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::breakpoint);
 
-  enum Brainfuck::result_t result = g_bf->next(&output, &didOutput);
-  if (result == Brainfuck::RESULT_ERR) {
-    if (g_timerID) {
-      timeKillEvent(g_timerID);
-      timeEndPeriod(ui::speed);
-      g_timerID = 0;
+  g_bf.setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::breakpoint);
+  enum Brainfuck::result_t result = g_bf.next(&output, &didOutput);
+
+  if (result == Brainfuck::RESULT_FIN || result == Brainfuck::RESULT_ERR) {
+    if (ui::outCharSet == IDM_BF_OUTPUT_UTF8) {
+      const wchar_t *rest = g_u8Tokenizer.flush();
+      if (rest) ui::appendOutput(rest);
+    } else if (ui::outCharSet == IDM_BF_OUTPUT_SJIS) {
+      const wchar_t *rest = g_sjisTokenizer.flush();
+      if (rest) ui::appendOutput(rest);
     }
-    ui::messageBox(ui::hWnd, g_bf->getLastError(), L"Error", MB_ICONWARNING);
-    result = Brainfuck::RESULT_FIN;
+    return result;
   }
 
-  if (result == Brainfuck::RESULT_FIN) {
-    if (!g_outBuf.empty()) {
-      int codePage = (ui::outCharSet == IDM_BF_OUTPUT_SJIS) ? 932 : CP_UTF8;
-      int outLen = MultiByteToWideChar(codePage, 0, g_outBuf.c_str(), (int)g_outBuf.size() + 1,
-                                       (wchar_t *)NULL, 0);
-      wchar_t *wcOut = (wchar_t *)malloc(sizeof(wchar_t) * outLen);
-      if (!wcOut) {
-        ui::messageBox(ui::hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
-      } else {
-        MultiByteToWideChar(codePage, 0, g_outBuf.c_str(), (int)g_outBuf.size() + 1, wcOut, outLen);
-        ui::setOutput(wcOut);
-        free(wcOut);
-      }
-    }
-  } else {
-    if (didOutput) {
+  if (didOutput) {
+    if (ui::outCharSet == IDM_BF_OUTPUT_HEX) {
+      wchar_t wcOut[4];
+      util::toHex(output, wcOut);
+      ui::appendOutput(wcOut);
+    } else {
+      // Align newlines to CRLF.
+      if (g_prevCR && output != '\n') ui::appendOutput(L"\n");
+      if (!g_prevCR && output == '\n') ui::appendOutput(L"\r");
+      g_prevCR = output == '\r';
+
       if (ui::outCharSet == IDM_BF_OUTPUT_ASCII) {
-        wchar_t wcOut[] = {0, 0};
-        MultiByteToWideChar(CP_UTF8, 0, (char *)&output, 1, wcOut, 1);
-        // Align newlines to CRLF.
-        if (g_prevCR && wcOut[0] != L'\n') ui::appendOutput(L"\n");
-        if (!g_prevCR && wcOut[0] == L'\n') ui::appendOutput(L"\r");
-        g_prevCR = wcOut[0] == L'\r';
+        wchar_t wcOut[] = {output, 0};
         ui::appendOutput(wcOut);
-      } else if (ui::outCharSet == IDM_BF_OUTPUT_HEX) {
-        wchar_t wcOut[4];
-        util::toHex(output, wcOut);
-        ui::appendOutput(wcOut);
-      } else {
-        // Align newlines to CRLF.
-        if (g_prevCR && output != '\n') g_outBuf += '\n';
-        if (!g_prevCR && output == '\n') g_outBuf += '\r';
-        g_prevCR = output == L'\r';
-        g_outBuf += output;
+      } else if (ui::outCharSet == IDM_BF_OUTPUT_UTF8) {
+        const wchar_t *converted = g_u8Tokenizer.add(output);
+        if (converted) ui::appendOutput(converted);
+      } else if (ui::outCharSet == IDM_BF_OUTPUT_SJIS) {
+        const wchar_t *converted = g_sjisTokenizer.add(output);
+        if (converted) ui::appendOutput(converted);
       }
     }
   }
@@ -170,7 +172,7 @@ static enum Brainfuck::result_t bfNext() {
 tret_t WINAPI threadRunner(void *lpParameter) {
   UNREFERENCED_PARAMETER(lpParameter);
 
-  HANDLE hEvent = 0;
+  HANDLE hEvent = NULL;
   if (ui::speed != 0) {
     hEvent = CreateEventW(NULL, FALSE, TRUE, NULL);
     if (timeBeginPeriod(ui::speed) == TIMERR_NOERROR) {
@@ -192,28 +194,28 @@ tret_t WINAPI threadRunner(void *lpParameter) {
     if ((result = bfNext()) != Brainfuck::RESULT_RUN) break;
     if (ui::debug) {
       unsigned size;
-      const unsigned char *memory = g_bf->getMemory(&size);
+      const unsigned char *memory = g_bf.getMemory(&size);
       ui::setMemory(memory, size);
-      ui::selProg(g_bf->getProgPtr());
+      ui::selProg(g_bf.getProgPtr());
     }
   }
 
-  if (g_timerID) {
-    timeKillEvent(g_timerID);
-    timeEndPeriod(ui::speed);
-    CloseHandle(hEvent);
-    g_timerID = 0;
-  }
-  if (g_ctrlThread == CTRLTHREAD_END) {  // Terminated
-    g_bf->reset();
-  } else {                                 // Paused, finished, or error
-    if (g_ctrlThread == CTRLTHREAD_RUN) {  // Finished or error
-      ui::setState(result == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
+  stopTimer();
+  if (hEvent) CloseHandle(hEvent);
+
+  if (g_ctrlThread == CTRLTHREAD_END) {
+    ui::setState(ui::STATE_INIT);
+  } else {  // Paused, finished, error, or breakpoint
+    ui::setState(result == Brainfuck::RESULT_RUN || result == Brainfuck::RESULT_BREAK
+                     ? ui::STATE_PAUSE
+                     : ui::STATE_FINISH);
+    if (result == Brainfuck::RESULT_ERR) {
+      ui::messageBox(ui::hWnd, g_bf.getLastError(), L"Brainfuck Error", MB_ICONWARNING);
     }
     unsigned size;
-    const unsigned char *memory = g_bf->getMemory(&size);
+    const unsigned char *memory = g_bf.getMemory(&size);
     ui::setMemory(memory, size);
-    ui::selProg(g_bf->getProgPtr());
+    ui::selProg(g_bf.getProgPtr());
   }
 
   PostMessageW(ui::hWnd, WM_APP_THREADEND, 0, 0);
@@ -226,7 +228,6 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
 
   switch (uMsg) {
     case WM_CREATE:
-      g_bf = new Brainfuck();
       ui::onCreate(hWnd, ((LPCREATESTRUCT)(lParam))->hInstance);
       if (g_cmdLine[0]) {
         ui::openFile(false, g_cmdLine);
@@ -291,7 +292,6 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
       break;
 
     case WM_DESTROY:
-      delete g_bf;
       DeleteObject(BGDark);
       ui::onDestroy();
       PostQuitMessage(0);
@@ -311,7 +311,8 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
           if (g_hThread) {
             SetThreadPriority(g_hThread, THREAD_PRIORITY_BELOW_NORMAL);
           } else {
-            ui::messageBox(hWnd, L"Failed to create a runner thread.", L"Error", MB_ICONERROR);
+            ui::messageBox(hWnd, L"Failed to create a runner thread.", L"Internal Error",
+                           MB_ICONERROR);
             break;
           }
 
@@ -325,26 +326,31 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
             didInit = true;
           }
 
-          ui::setState(bfNext() == Brainfuck::RESULT_FIN ? ui::STATE_FINISH : ui::STATE_PAUSE);
+          Brainfuck::result_t result = bfNext();
+          ui::setState(result == Brainfuck::RESULT_FIN || result == Brainfuck::RESULT_ERR
+                           ? ui::STATE_FINISH
+                           : ui::STATE_PAUSE);
+          if (result == Brainfuck::RESULT_ERR) {
+            ui::messageBox(ui::hWnd, g_bf.getLastError(), L"Brainfuck Error", MB_ICONWARNING);
+          }
+
           unsigned size;
-          const unsigned char *memory = g_bf->getMemory(&size);
+          const unsigned char *memory = g_bf.getMemory(&size);
           ui::setMemory(memory, size);
-          ui::selProg(g_bf->getProgPtr());
+          ui::selProg(g_bf.getProgPtr());
           break;
         }
 
         case IDC_CMDBTN_FIRST + 2:  // Pause
           if (g_hThread) g_ctrlThread = CTRLTHREAD_PAUSE;
-          ui::setState(ui::STATE_PAUSE);
           break;
 
         case IDC_CMDBTN_FIRST + 3:  // End
           if (g_hThread) {
             g_ctrlThread = CTRLTHREAD_END;
           } else {
-            g_bf->reset();
+            ui::setState(ui::STATE_INIT);
           }
-          ui::setState(ui::STATE_INIT);
           didInit = false;
           break;
 
@@ -446,7 +452,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
 
         case IDM_BF_BREAKPOINT:
           ui::breakpoint = !ui::breakpoint;
-          g_bf->setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::breakpoint);
+          g_bf.setBehavior(ui::noInput, ui::wrapInt, ui::signedness, ui::breakpoint);
           break;
 
         case IDM_OPT_SPEED_FASTEST:
@@ -469,7 +475,7 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
           if (DialogBoxW(ui::hInst, L"memviewopt", hWnd, ui::memViewProc) == IDOK &&
               ui::state != ui::STATE_INIT) {
             unsigned size;
-            const unsigned char *memory = g_bf->getMemory(&size);
+            const unsigned char *memory = g_bf.getMemory(&size);
             ui::setMemory(memory, size);
           }
           break;
@@ -479,11 +485,11 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
           break;
 
         case IDM_OPT_HLTPROG:
-          ui::selProg(g_bf->getProgPtr());
+          ui::selProg(g_bf.getProgPtr());
           break;
 
         case IDM_OPT_HLTMEM:
-          ui::selMemView(g_bf->getMemPtr());
+          ui::selMemView(g_bf.getMemPtr());
           break;
 
         case IDM_OPT_DARK:

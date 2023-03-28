@@ -73,10 +73,10 @@ menu MENU
     }
     POPUP "&Output Charset"
     {
-      MENUITEM "&ASCII (Real Time Output)", IDM_BF_OUTPUT_ASCII
-      MENUITEM "&UTF-8 (Bufferred Output)", IDM_BF_OUTPUT_UTF8
-      MENUITEM "Shift_&JIS (Bufferred Output)", IDM_BF_OUTPUT_SJIS
-      MENUITEM "&Hexadecimal (Real Time Output)", IDM_BF_OUTPUT_HEX
+      MENUITEM "&ASCII", IDM_BF_OUTPUT_ASCII
+      MENUITEM "&UTF-8", IDM_BF_OUTPUT_UTF8
+      MENUITEM "Shift_&JIS", IDM_BF_OUTPUT_SJIS
+      MENUITEM "&Hexadecimal", IDM_BF_OUTPUT_HEX
     }
     POPUP "Input &Charset"
     {

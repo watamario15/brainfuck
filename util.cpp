@@ -1,68 +1,15 @@
 #include "util.hpp"
 
+#include <string>
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
 
-#include <string>
 #include "ui.hpp"
 
 namespace util {
-const unsigned char *UTF8Parser::flush() {
-  if (index == 0) return NULL;
-  for (int i = 0; i < index; ++i) token[i] = '?';
-  state = index = 0;
-  return token;
-}
-
-const unsigned char *UTF8Parser::add(char chr) {
-  if (state == 0) {  // Reading the first character of a token.
-    memset(token, 0, sizeof(token));
-
-    // Got a later byte character, which is unexpected here.
-    if ((chr & 0xC0) == 0x80) {
-      token[0] = '?';
-      return token;
-    }
-
-    token[0] = chr;
-
-    if (!(chr & 0x80)) return token;  // ASCII
-
-    char tmp = chr << 2;
-    for (int i = 1; true; ++i) {
-      if (!(tmp & 0x80)) {
-        state = i;
-        break;
-      }
-      if (i == 6) {
-        state = 7;
-        break;
-      }
-      tmp <<= 1;
-    }
-    ++index;
-  } else {  // Reading a later byte character of a token.
-    // Got a first byte character, which is unexpected here.
-    if ((chr & 0xC0) != 0x80) {
-      for (int i = 0; i < index; ++i) token[i] = '?';
-      state = index = 0;
-      return token;
-    }
-
-    token[index++] = chr;
-    --state;
-
-    if (state == 0) {
-      index = 0;
-      return token;
-    }
-  }
-
-  return NULL;
-}
-
 static inline bool isHex(wchar_t chr) {
   return (chr >= L'0' && chr <= L'9') || (chr >= L'A' && chr <= L'F') ||
          (chr >= L'a' && chr <= L'f');
@@ -122,7 +69,7 @@ bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest) {
 
   *dest = (unsigned char *)malloc(tmp.size() + 1);
   if (!*dest) {
-    ui::messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    ui::messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return false;
   }
 

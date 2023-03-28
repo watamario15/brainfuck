@@ -703,7 +703,7 @@ wchar_t *getEditor() {
   if ((retEditBuf = (wchar_t *)malloc(sizeof(wchar_t) * editorSize))) {
     GetWindowTextW(hEditor, retEditBuf, editorSize);
   } else {
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
   }
 
   return retEditBuf;
@@ -716,7 +716,7 @@ wchar_t *getInput() {
   if ((retInBuf = (wchar_t *)malloc(sizeof(wchar_t) * inputSize))) {
     GetWindowTextW(hInput, retInBuf, inputSize);
   } else {
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
   }
 
   return retInBuf;
@@ -734,7 +734,7 @@ void switchWordwrap() {
   int editorSize = GetWindowTextLengthW(hEditor) + 1;
   wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
   if (!wcEditor) {
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
   GetWindowTextW(hEditor, wcEditor, editorSize);
@@ -745,7 +745,7 @@ void switchWordwrap() {
   wchar_t *wcInput = (wchar_t *)malloc(sizeof(wchar_t) * inputSize);
   if (!wcInput) {
     free(wcEditor);
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
   GetWindowTextW(hInput, wcInput, inputSize);
@@ -756,7 +756,7 @@ void switchWordwrap() {
   if (!wcOutput) {
     free(wcEditor);
     free(wcInput);
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
   GetWindowTextW(hOutput, wcOutput, outputSize);
@@ -927,7 +927,7 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
 
   char *fileBuf = (char *)malloc(sizeof(char) * fileSize);
   if (!fileBuf) {
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
 
@@ -941,7 +941,7 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   wchar_t *wcFileBuf = (wchar_t *)calloc(length + 1, sizeof(wchar_t));
   if (!wcFileBuf) {
     free(fileBuf);
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
 
@@ -989,7 +989,7 @@ bool saveFile(bool _isOverwrite) {
   int editorSize = GetWindowTextLengthW(hEditor) + 1;
   wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
   if (!wcEditor) {
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return false;
   }
   GetWindowTextW(hEditor, wcEditor, editorSize);
@@ -1000,7 +1000,7 @@ bool saveFile(bool _isOverwrite) {
   int length = WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, NULL, 0, NULL, NULL);
   char *szEditor = (char *)malloc(sizeof(char) * length);
   if (!szEditor) {
-    messageBox(hWnd, L"Memory allocation failed.", L"Error", MB_ICONWARNING);
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return false;
   }
   WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, szEditor, length, NULL, NULL);

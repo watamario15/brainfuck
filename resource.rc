@@ -59,6 +59,7 @@ menu MENU
   POPUP "&Edit"
   {
     MENUITEM "&Undo", IDM_EDIT_UNDO
+    MENUITEM "&Redo", IDM_EDIT_REDO
     MENUITEM "Cu&t", IDM_EDIT_CUT
     MENUITEM "&Copy", IDM_EDIT_COPY
     MENUITEM "&Paste", IDM_EDIT_PASTE

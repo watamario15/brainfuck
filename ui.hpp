@@ -30,6 +30,7 @@ void copy();
 void paste();
 void selAll();
 void undo();
+void redo();
 
 // Shows a message box with TaskDialog or MessageBoxW.
 //

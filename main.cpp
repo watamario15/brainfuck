@@ -374,6 +374,10 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
           ui::undo();
           break;
 
+        case IDM_EDIT_REDO:
+          ui::redo();
+          break;
+
         case IDM_EDIT_CUT:
           ui::cut();
           break;

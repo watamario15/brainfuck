@@ -1,4 +1,5 @@
 #include <string>
+#include <deque>
 
 #ifndef _UNICODE
 #define _UNICODE
@@ -65,18 +66,21 @@ typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance,
 namespace ui {
 static const wchar_t *wcCmdBtn[CMDBTN_LEN] = {L"Run", L"Next", L"Pause", L"End"},
                      *wcScrKB[SCRKBD_LEN] = {L">", L"<", L"+", L"-", L".", L",", L"[", L"]", L"@"};
+static const int historyMax = 32;
 static HWND hEditor, hInput, hOutput, hMemView, hFocused, hCmdBtn[CMDBTN_LEN], hScrKB[SCRKBD_LEN];
 static HMENU hMenu;
 static HFONT hBtnFont = NULL, hEditFont = NULL;
 static LOGFONTW editFont;
-static int topPadding = 0, memViewStart = 0;
+static int topPadding = 0, memViewStart = 0, historyIndex = 0, savedIndex = 0;
 static wchar_t *retEditBuf = NULL, *retInBuf = NULL;
 static std::wstring wstrFileName;
-static bool withBOM = false, wordwrap = true;
+static bool withBOM = false, wordwrap = true, validHistory = true;
 static enum util::newline_t newLine = util::NEWLINE_CRLF;
+static std::deque<wchar_t *> history;
 #ifdef UNDER_CE
 static HWND hCmdBar;
 #else
+static HMODULE comctl32 = NULL;
 static TaskDialog_t taskDialog = NULL;
 static int dpi = 96, sysDPI = 96;
 #endif
@@ -88,7 +92,6 @@ int speed = 10, outCharSet = IDM_BF_OUTPUT_UTF8, inCharSet = IDM_BF_INPUT_UTF8;
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
 HWND hWnd;
 HINSTANCE hInst;
-HMODULE comctl32 = NULL;
 
 // Enables/Disables menu items from the smaller nearest 10 multiple to `_endID`.
 static void enableMenus(unsigned _endID, bool _enable) {
@@ -96,6 +99,60 @@ static void enableMenus(unsigned _endID, bool _enable) {
   for (i = (_endID / 10) * 10; i <= _endID; ++i) {
     EnableMenuItem(hMenu, i, MF_BYCOMMAND | (_enable ? MF_ENABLED : MF_GRAYED));
   }
+}
+
+// Hook window procedure for the program editor to manage the undo/redo buffer.
+static LRESULT CALLBACK editorProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam) {
+  static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
+
+  switch (uMsg) {
+    case WM_CHAR: {
+      if (!validHistory) break;
+
+      int editorSize = GetWindowTextLengthW(hEditor) + 1;
+      wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
+      if (!wcEditor) {
+        messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
+        while (!history.empty()) {
+          free(history.back());
+          history.pop_back();
+        }
+        historyIndex = 0;
+        savedIndex = -1;
+        validHistory = false;
+        break;
+      }
+      GetWindowTextW(hEditor, wcEditor, editorSize);
+
+      if (!history.empty() && !wcscmp(history[historyIndex], wcEditor)) {
+        free(wcEditor);
+        break;
+      }
+
+      int toRemove = history.size() - historyIndex - 1, i = 0;
+      for (; i < toRemove; ++i) {
+        free(history.back());
+        history.pop_back();
+      }
+
+      if (history.size() >= historyMax) {
+        free(history.front());
+        history.pop_front();
+        --historyIndex;
+        if (savedIndex >= 0) --savedIndex;
+      }
+
+      history.push_back(wcEditor);
+      ++historyIndex;
+      break;
+    }
+
+    case WM_DESTROY:
+      mySetWindowLongW(hWnd, GWL_WNDPROC, prevWndProc);
+      return 0;
+  }
+
+  return CallWindowProcW(prevWndProc, hWnd, uMsg, wParam, lParam);
 }
 
 void onCreate(HWND _hWnd, HINSTANCE _hInst) {
@@ -123,6 +180,7 @@ void onCreate(HWND _hWnd, HINSTANCE _hInst) {
                           WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
                       0, 0, 0, 0, hWnd, (HMENU)IDC_EDITOR, hInst, NULL);
   SendMessageW(hEditor, EM_SETLIMITTEXT, (WPARAM)-1, 0);
+  mySetWindowLongW(hEditor, GWL_USERDATA, mySetWindowLongW(hEditor, GWL_WNDPROC, editorProc));
 
   // Program input
   hInput =
@@ -231,7 +289,9 @@ void onDestroy() {
   DeleteObject(hEditFont);
   if (retEditBuf) delete[] retEditBuf;
   if (retInBuf) delete[] retInBuf;
+#ifndef UNDER_CE
   if (comctl32) FreeLibrary(comctl32);
+#endif
 }
 
 void onSize() {
@@ -352,12 +412,11 @@ void onInitMenuPopup() {
   // Options -> Word Wrap
   CheckMenuItem(hMenu, IDM_OPT_WORDWRAP, MF_BYCOMMAND | wordwrap ? MF_CHECKED : MF_UNCHECKED);
 
-  bool undoable = SendMessageW(hEditor, EM_CANUNDO, 0, 0) != 0;
-
   if (state == STATE_INIT) {
     enableMenus(IDM_FILE_NEW, true);
     enableMenus(IDM_FILE_OPEN, true);
-    enableMenus(IDM_EDIT_UNDO, undoable);
+    enableMenus(IDM_EDIT_UNDO, validHistory && historyIndex > 0);
+    enableMenus(IDM_EDIT_REDO, validHistory && historyIndex < (int)history.size() - 1);
     enableMenus(IDM_BF_MEMTYPE_UNSIGNED, true);
     enableMenus(IDM_BF_OUTPUT_HEX, true);
     enableMenus(IDM_BF_INPUT_HEX, true);
@@ -373,6 +432,7 @@ void onInitMenuPopup() {
     enableMenus(IDM_FILE_NEW, false);
     enableMenus(IDM_FILE_OPEN, false);
     enableMenus(IDM_EDIT_UNDO, false);
+    enableMenus(IDM_EDIT_REDO, false);
     enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
     enableMenus(IDM_BF_OUTPUT_HEX, false);
     enableMenus(IDM_BF_INPUT_HEX, false);
@@ -388,6 +448,7 @@ void onInitMenuPopup() {
     enableMenus(IDM_FILE_NEW, false);
     enableMenus(IDM_FILE_OPEN, false);
     enableMenus(IDM_EDIT_UNDO, false);
+    enableMenus(IDM_EDIT_REDO, false);
     enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
     enableMenus(IDM_BF_OUTPUT_HEX, false);
     enableMenus(IDM_BF_INPUT_HEX, false);
@@ -434,7 +495,13 @@ void paste() { SendMessageW(hFocused, WM_PASTE, 0, 0); }
 
 void selAll() { SendMessageW(hFocused, EM_SETSEL, 0, -1); }
 
-void undo() { SendMessageW(hEditor, EM_UNDO, 0, 0); }
+void undo() {
+  // TODO
+}
+
+void redo() {
+  // TODO
+}
 
 int messageBox(HWND _hWnd, const wchar_t *_lpText, const wchar_t *_lpCaption, unsigned _uType) {
 #ifndef UNDER_CE
@@ -771,6 +838,7 @@ void switchWordwrap() {
                           WS_VSCROLL | (wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
                       0, 0, 0, 0, hWnd, (HMENU)IDC_EDITOR, hInst, NULL);
   SendMessageW(hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
+  mySetWindowLongW(hEditor, GWL_USERDATA, mySetWindowLongW(hEditor, GWL_WNDPROC, editorProc));
 
   // Program input
   hInput =
@@ -857,7 +925,8 @@ void chooseFont() {
 }
 
 bool promptSave() {
-  if (SendMessageW(hEditor, EM_GETMODIFY, 0, 0) == 0) return true;
+  if (validHistory && historyIndex == savedIndex) return true;
+  if (!validHistory && SendMessageW(hEditor, EM_GETMODIFY, 0, 0) == 0) return true;
 
   int ret = messageBox(hWnd, L"Unsaved data will be lost. Save changes?", L"Confirm",
                        MB_ICONWARNING | MB_YESNOCANCEL);
@@ -890,6 +959,22 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
     wstrFileName = L"";
     withBOM = false;
     newLine = util::NEWLINE_CRLF;
+
+    while (!history.empty()) {
+      free(history.back());
+      history.pop_back();
+    }
+    wchar_t *wcEditor = (wchar_t *)calloc(1, sizeof(wchar_t));
+    if (!wcEditor) {
+      messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
+      historyIndex = 0;
+      savedIndex = -1;
+      validHistory = false;
+      return;
+    }
+    history.push_back(wcEditor);
+    historyIndex = savedIndex = 0;
+    validHistory = true;
     return;
   }
 
@@ -957,6 +1042,22 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   wstrFileName = _fileName;
   withBOM = padding != 0;
 
+  while (!history.empty()) {
+    free(history.back());
+    history.pop_back();
+  }
+  wchar_t *wcEditor = _wcsdup(converted.c_str());
+  if (!wcEditor) {
+    messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
+    historyIndex = 0;
+    savedIndex = -1;
+    validHistory = false;
+    return;
+  }
+  history.push_back(wcEditor);
+  historyIndex = savedIndex = 0;
+  validHistory = true;
+
   std::wstring title = L"[";
   title.append(wstrFileName.substr(wstrFileName.rfind(L'\\') + 1) + L"] - " APP_NAME);
   SetWindowTextW(hWnd, title.c_str());
@@ -1018,6 +1119,7 @@ bool saveFile(bool _isOverwrite) {
   CloseHandle(hFile);
   free(szEditor);
 
+  if (validHistory) savedIndex = historyIndex;
   SendMessageW(hEditor, EM_SETMODIFY, FALSE, 0);
   wstrFileName = wcFileName;
 

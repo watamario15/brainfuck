@@ -99,8 +99,7 @@ static bool bfInit() {
   if (!wcInput) return false;
 
   if (ui::inCharSet == IDM_BF_INPUT_HEX) {
-    if (!util::parseHex(ui::hWnd, wcInput, &input)) return false;
-    inLen = input ? strlen((char *)input) : 0;
+    if (!util::parseHex(ui::hWnd, wcInput, &input, &inLen)) return false;
   } else {
     int codePage = (ui::inCharSet == IDM_BF_INPUT_SJIS) ? 932 : CP_UTF8;
     inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, NULL, 0, NULL, NULL);
@@ -152,10 +151,7 @@ static enum Brainfuck::result_t bfNext() {
       if (!g_prevCR && output == '\n') ui::appendOutput(L"\r");
       g_prevCR = output == '\r';
 
-      if (ui::outCharSet == IDM_BF_OUTPUT_ASCII) {
-        wchar_t wcOut[] = {output, 0};
-        ui::appendOutput(wcOut);
-      } else if (ui::outCharSet == IDM_BF_OUTPUT_UTF8) {
+      if (ui::outCharSet == IDM_BF_OUTPUT_UTF8) {
         const wchar_t *converted = g_u8Tokenizer.add(output);
         if (converted) ui::appendOutput(converted);
       } else if (ui::outCharSet == IDM_BF_OUTPUT_SJIS) {
@@ -400,10 +396,6 @@ static LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPA
 
         case IDM_BF_MEMTYPE_UNSIGNED:
           ui::signedness = false;
-          break;
-
-        case IDM_BF_OUTPUT_ASCII:
-          ui::outCharSet = IDM_BF_OUTPUT_ASCII;
           break;
 
         case IDM_BF_OUTPUT_UTF8:

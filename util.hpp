@@ -14,7 +14,7 @@ enum newline_t { NEWLINE_CRLF, NEWLINE_LF, NEWLINE_CR };
 // Converts a hex string to a byte sequence. This function allocates `dest` unless it is NULL.
 // It's your responsibility to `free()` it.
 // Return value of true indicates success, otherwise indicates failure.
-extern bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest);
+extern bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest, int *length);
 
 // Converts a byte to a hex string. `dest` must have at least 4 elements.
 extern void toHex(unsigned char num, wchar_t *dest);

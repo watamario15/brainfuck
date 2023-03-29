@@ -25,7 +25,7 @@ class UTF8Tokenizer {
 
 class SJISTokenizer {
  public:
-  SJISTokenizer() : state(0), index(0){};
+  SJISTokenizer() : token(0){};
 
   // Resets and returns the remaining bytes if any, all transformed to "?".
   // Returns NULL if no bytes are left.
@@ -38,9 +38,8 @@ class SJISTokenizer {
   const wchar_t *add(unsigned char chr);
 
  private:
-  int state, index;
-  unsigned char token[16];
-  wchar_t result[16];
+  unsigned char token;
+  wchar_t result[4];
 };
 
 #endif

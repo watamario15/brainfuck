@@ -84,7 +84,7 @@ static int dpi = 96, sysDPI = 96;
 enum state_t state = STATE_INIT;
 bool signedness = true, wrapInt = true, breakpoint = false, debug = true, dark = true,
      horizontal = false;
-int speed = 10, outCharSet = IDM_BF_OUTPUT_ASCII, inCharSet = IDM_BF_INPUT_UTF8;
+int speed = 10, outCharSet = IDM_BF_OUTPUT_UTF8, inCharSet = IDM_BF_INPUT_UTF8;
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;
 HWND hWnd;
 HINSTANCE hInst;
@@ -315,7 +315,7 @@ void onInitMenuPopup() {
                      signedness ? IDM_BF_MEMTYPE_SIGNED : IDM_BF_MEMTYPE_UNSIGNED, MF_BYCOMMAND);
 
   // Brainfuck -> Output Charset
-  CheckMenuRadioItem(hMenu, IDM_BF_OUTPUT_ASCII, IDM_BF_OUTPUT_HEX, outCharSet, MF_BYCOMMAND);
+  CheckMenuRadioItem(hMenu, IDM_BF_OUTPUT_UTF8, IDM_BF_OUTPUT_HEX, outCharSet, MF_BYCOMMAND);
 
   // Brainfuck -> Input Charset
   CheckMenuRadioItem(hMenu, IDM_BF_INPUT_UTF8, IDM_BF_INPUT_HEX, inCharSet, MF_BYCOMMAND);
@@ -920,7 +920,7 @@ void openFile(bool _newFile, const wchar_t *_fileName) {
   }
 
   DWORD fileSize = GetFileSize(hFile, NULL), readLen;
-  if (fileSize >= 65536) {
+  if (fileSize >= 65536 * 2) {
     messageBox(hWnd, L"This file is too large.", L"Error", MB_ICONWARNING);
     return;
   }

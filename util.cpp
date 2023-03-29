@@ -15,7 +15,7 @@ static inline bool isHex(wchar_t chr) {
          (chr >= L'a' && chr <= L'f');
 }
 
-bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest) {
+bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest, int *length) {
   wchar_t hex[2];
   std::string tmp;
   int hexLen = 0, i;
@@ -62,18 +62,21 @@ bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest) {
     if (hexInput[i] == L'\0') break;
   }
 
-  if (tmp.size() == 0) {
+  *length = tmp.size();
+
+  if (*length == 0) {
     *dest = NULL;
     return true;
   }
 
-  *dest = (unsigned char *)malloc(tmp.size() + 1);
+  *dest = (unsigned char *)malloc(*length);
   if (!*dest) {
     ui::messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
+    *length = 0;
     return false;
   }
 
-  memcpy(*dest, tmp.c_str(), tmp.size() + 1);
+  memcpy(*dest, tmp.c_str(), *length);
   return true;
 }
 

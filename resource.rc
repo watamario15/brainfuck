@@ -73,15 +73,14 @@ menu MENU
     }
     POPUP "&Output Charset"
     {
-      MENUITEM "&ASCII", IDM_BF_OUTPUT_ASCII
       MENUITEM "&UTF-8", IDM_BF_OUTPUT_UTF8
-      MENUITEM "Shift_&JIS", IDM_BF_OUTPUT_SJIS
+      MENUITEM "Shift_&JIS (CP932)", IDM_BF_OUTPUT_SJIS
       MENUITEM "&Hexadecimal", IDM_BF_OUTPUT_HEX
     }
     POPUP "Input &Charset"
     {
       MENUITEM "&UTF-8", IDM_BF_INPUT_UTF8
-      MENUITEM "Shift_&JIS", IDM_BF_INPUT_SJIS
+      MENUITEM "Shift_&JIS (CP932)", IDM_BF_INPUT_SJIS
       MENUITEM "&Hexadecimal", IDM_BF_INPUT_HEX
     }
     POPUP "&Input Instruction"

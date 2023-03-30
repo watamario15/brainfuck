@@ -111,7 +111,36 @@ DEP_CPP_BF_CP=\
 SOURCE=..\main.cpp
 DEP_CPP_MAIN_=\
 	"..\bf.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
 	"..\resource.h"\
+	"..\runner.hpp"\
+	"..\util.hpp"\
+	"..\wproc.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\msg.cpp
+DEP_CPP_MSG_C=\
+	"..\bf.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
+	"..\resource.h"\
+	"..\runner.hpp"\
+	"..\ui.hpp"\
+	"..\util.hpp"\
+	"..\wproc.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\runner.cpp
+DEP_CPP_RUNNE=\
+	"..\bf.hpp"\
+	"..\main.hpp"\
+	"..\resource.h"\
+	"..\runner.hpp"\
 	"..\tokenizer.hpp"\
 	"..\ui.hpp"\
 	"..\util.hpp"\
@@ -129,18 +158,32 @@ DEP_CPP_TOKEN=\
 SOURCE=..\ui.cpp
 DEP_CPP_UI_CP=\
 	"..\bf.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
 	"..\resource.h"\
 	"..\ui.hpp"\
 	"..\util.hpp"\
+	"..\wproc.hpp"\
 	
 # End Source File
 # Begin Source File
 
 SOURCE=..\util.cpp
 DEP_CPP_UTIL_=\
-	"..\bf.hpp"\
-	"..\ui.hpp"\
 	"..\util.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\wproc.cpp
+DEP_CPP_WPROC=\
+	"..\bf.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
+	"..\resource.h"\
+	"..\runner.hpp"\
+	"..\util.hpp"\
+	"..\wproc.hpp"\
 	
 # End Source File
 # End Group
@@ -153,7 +196,19 @@ SOURCE=..\bf.hpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\main.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\msg.hpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\resource.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\runner.hpp
 # End Source File
 # Begin Source File
 
@@ -166,6 +221,10 @@ SOURCE=..\ui.hpp
 # Begin Source File
 
 SOURCE=..\util.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\wproc.hpp
 # End Source File
 # End Group
 # Begin Group "Resource Files"

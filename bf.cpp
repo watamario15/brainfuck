@@ -1,10 +1,11 @@
 #include "bf.hpp"
 
+#include <string.h>
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include <string.h>
 
 void Brainfuck::reset() {
   progIndex = 0;
@@ -14,23 +15,22 @@ void Brainfuck::reset() {
   memLen = 1;
 }
 
-void Brainfuck::reset(unsigned _progLen, const wchar_t *_program, unsigned _inLen,
-                      const void *_input) {
-  if (_progLen == 0 || !_program) {
-    program = NULL;
-    progLen = 0;
+void Brainfuck::reset(unsigned progLen, const wchar_t *program, unsigned inLen, const void *input) {
+  if (progLen == 0 || !program) {
+    Brainfuck::program = NULL;
+    Brainfuck::progLen = 0;
   } else {
-    program = _program;
-    progLen = _progLen;
+    Brainfuck::program = program;
+    Brainfuck::progLen = progLen;
   }
   progIndex = 0;
 
-  if (_inLen == 0 || !_input) {
-    input = NULL;
-    inLen = 0;
+  if (inLen == 0 || !input) {
+    Brainfuck::input = NULL;
+    Brainfuck::inLen = 0;
   } else {
-    input = (const unsigned char *)_input;
-    inLen = _inLen;
+    Brainfuck::input = (const unsigned char *)input;
+    Brainfuck::inLen = inLen;
   }
   inIndex = 0;
 
@@ -39,16 +39,16 @@ void Brainfuck::reset(unsigned _progLen, const wchar_t *_program, unsigned _inLe
   memLen = 1;
 }
 
-void Brainfuck::setBehavior(enum noinput_t _noInput, bool _wrapInt, bool _signedness, bool _debug) {
-  noInput = _noInput;
-  wrapInt = _wrapInt;
-  signedness = _signedness;
-  debug = _debug;
+void Brainfuck::setBehavior(enum noinput_t noInput, bool wrapInt, bool signedness, bool debug) {
+  Brainfuck::noInput = noInput;
+  Brainfuck::wrapInt = wrapInt;
+  Brainfuck::signedness = signedness;
+  Brainfuck::debug = debug;
 }
 
-enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutput) {
+enum Brainfuck::result_t Brainfuck::next(unsigned char *output, bool *didOutput) {
   enum result_t result = RESULT_RUN;
-  *_didOutput = false;
+  *didOutput = false;
 
   if (progIndex >= progLen) {
     return RESULT_FIN;
@@ -122,8 +122,8 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
       break;
 
     case L'.':
-      *_output = memory[memIndex];
-      *_didOutput = true;
+      *output = memory[memIndex];
+      *didOutput = true;
       break;
 
     case L',':

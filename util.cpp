@@ -1,21 +1,87 @@
 #include "util.hpp"
 
-#include <string>
-
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
-#include "ui.hpp"
-
 namespace util {
-static inline bool isHex(wchar_t chr) {
-  return (chr >= L'0' && chr <= L'9') || (chr >= L'A' && chr <= L'F') ||
-         (chr >= L'a' && chr <= L'f');
+#ifdef UNDER_CE
+int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t *lpCaption,
+               unsigned uType) {
+  UNREFERENCED_PARAMETER(hInst);
+  return MessageBoxW(hWnd, lpText, lpCaption, uType);
 }
+#else
+// The function pointer type for TaskDialog API.
+typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance,
+                                         const wchar_t *pszWindowTitle,
+                                         const wchar_t *pszMainInstruction,
+                                         const wchar_t *pszContent, int dwCommonButtons,
+                                         const wchar_t *pszIcon, int *pnButton);
 
-bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest, int *length) {
+int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t *lpCaption,
+               unsigned uType) {
+  // Tests whether uType uses some features that TaskDialog doesn't support.
+  if (uType & ~(MB_ICONMASK | MB_TYPEMASK)) goto mbfallback;
+
+  int buttons;
+  switch (uType & MB_TYPEMASK) {
+    case MB_OK:
+      buttons = 1;
+      break;
+    case MB_OKCANCEL:
+      buttons = 1 + 8;
+      break;
+    case MB_RETRYCANCEL:
+      buttons = 16 + 8;
+      break;
+    case MB_YESNO:
+      buttons = 2 + 4;
+      break;
+    case MB_YESNOCANCEL:
+      buttons = 2 + 4 + 8;
+      break;
+    default:  // Not supported by TaskDialog.
+      goto mbfallback;
+  }
+
+  wchar_t *icon;
+  switch (uType & MB_ICONMASK) {
+    case 0:
+      icon = NULL;
+      break;
+    case MB_ICONWARNING:  // Same value as MB_ICONEXCLAMATION.
+      icon = MAKEINTRESOURCEW(-1);
+      break;
+    case MB_ICONERROR:  // Same value as MB_ICONSTOP and MB_ICONHAND.
+      icon = MAKEINTRESOURCEW(-2);
+      break;
+    default:  // Substitute anything else for the information icon.
+      icon = MAKEINTRESOURCEW(-3);
+  }
+
+  {
+    // Tries to load the TaskDialog API which is a newer substitite of MessageBoxW.
+    // This API is per monitor DPI aware but doesn't exist before Windows Vista.
+    // To make the system select version 6 comctl32.dll, we don't use the full path here.
+    HMODULE comctl32 = LoadLibraryW(L"comctl32.dll");
+    if (!comctl32) goto mbfallback;
+
+    TaskDialog_t taskDialog = (TaskDialog_t)(void *)GetProcAddress(comctl32, "TaskDialog");
+    if (!taskDialog) {
+      FreeLibrary(comctl32);
+      goto mbfallback;
+    }
+
+    int result;
+    taskDialog(hWnd, hInst, lpCaption, L"", lpText, buttons, icon, &result);
+    FreeLibrary(comctl32);
+    return result;
+  }
+
+mbfallback:
+  return MessageBoxW(hWnd, lpText, lpCaption, uType);
+}
+#endif
+
+bool parseHex(HWND hWnd, HINSTANCE hInst, const wchar_t *hexInput, unsigned char **dest,
+              int *length) {
   wchar_t hex[2];
   std::string tmp;
   int hexLen = 0, i;
@@ -23,7 +89,7 @@ bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest, int *len
   for (i = 0; true; ++i) {
     if (isHex(hexInput[i])) {
       if (hexLen >= 2) {
-        ui::messageBox(hWnd, L"Each memory value must fit in 8-bit.", L"Error", MB_ICONWARNING);
+        messageBox(hWnd, hInst, L"Each memory value must fit in 8-bit.", L"Error", MB_ICONWARNING);
         *dest = NULL;
         return false;
       }
@@ -54,7 +120,7 @@ bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest, int *len
         hexLen = 0;
       }
     } else {
-      ui::messageBox(hWnd, L"Invalid input.", L"Error", MB_ICONWARNING);
+      messageBox(hWnd, hInst, L"Invalid input.", L"Error", MB_ICONWARNING);
       *dest = NULL;
       return false;
     }
@@ -62,7 +128,7 @@ bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest, int *len
     if (hexInput[i] == L'\0') break;
   }
 
-  *length = tmp.size();
+  *length = (int)tmp.size();
 
   if (*length == 0) {
     *dest = NULL;
@@ -71,7 +137,7 @@ bool parseHex(HWND hWnd, const wchar_t *hexInput, unsigned char **dest, int *len
 
   *dest = (unsigned char *)malloc(*length);
   if (!*dest) {
-    ui::messageBox(hWnd, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
+    messageBox(hWnd, hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     *length = 0;
     return false;
   }
@@ -99,21 +165,22 @@ void toHex(unsigned char num, wchar_t *dest) {
   dest[3] = 0;
 }
 
-enum newline_t convertCRLF(std::wstring &_target, enum newline_t _newLine) {
-  std::wstring::iterator iter = _target.begin();
-  std::wstring::iterator iterEnd = _target.end();
+enum newline_t convertCRLF(std::wstring &target, enum newline_t newLine) {
+  std::wstring::iterator iter = target.begin();
+  std::wstring::iterator iterEnd = target.end();
   std::wstring temp;
-  const wchar_t *nl;
   size_t CRs = 0, LFs = 0, CRLFs = 0;
-  if (_newLine == NEWLINE_LF) {
+
+  const wchar_t *nl;
+  if (newLine == NEWLINE_LF) {
     nl = L"\n";
-  } else if (_newLine == NEWLINE_CR) {
+  } else if (newLine == NEWLINE_CR) {
     nl = L"\r";
   } else {
     nl = L"\r\n";
   }
 
-  if (0 < _target.size()) {
+  if (0 < target.size()) {
     wchar_t bNextChar = *iter++;
 
     while (true) {
@@ -146,14 +213,10 @@ enum newline_t convertCRLF(std::wstring &_target, enum newline_t _newLine) {
     }
   }
 
-  _target = temp;
+  target = temp;
 
-  if (LFs > CRLFs && LFs >= CRs) {
-    return NEWLINE_LF;
-  } else if (CRs > LFs && CRs > CRLFs) {
-    return NEWLINE_CR;
-  } else {
-    return NEWLINE_CRLF;
-  }
+  return LFs > CRLFs && LFs >= CRs  ? NEWLINE_LF
+         : CRs > LFs && CRs > CRLFs ? NEWLINE_CR
+                                    : NEWLINE_CRLF;
 }
 }  // namespace util

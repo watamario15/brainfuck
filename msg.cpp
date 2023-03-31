@@ -98,6 +98,20 @@ void onCommand(HWND hWnd, int id, HWND hWndCtl, UINT codeNotify) {
       didInit = false;
       break;
 
+    case IDC_EDITOR:
+      if (codeNotify == EN_CHANGE) {
+        global::history.add();
+        ui::updateTitle();
+      }
+      break;
+
+    case IDC_INPUT:
+      if (codeNotify == EN_CHANGE) {
+        global::inputHistory.add();
+        ui::updateTitle();
+      }
+      break;
+
     case IDM_FILE_NEW:
       ui::openFile(true);
       break;
@@ -119,11 +133,21 @@ void onCommand(HWND hWnd, int id, HWND hWndCtl, UINT codeNotify) {
       break;
 
     case IDM_EDIT_UNDO:
-      ui::undo();
+      if (global::hFocused == global::hEditor) {
+        global::history.undo();
+        ui::updateTitle();
+      } else if (global::hFocused == global::hInput) {
+        global::inputHistory.undo();
+      }
       break;
 
     case IDM_EDIT_REDO:
-      ui::redo();
+      if (global::hFocused == global::hEditor) {
+        global::history.redo();
+        ui::updateTitle();
+      } else if (global::hFocused == global::hInput) {
+        global::inputHistory.redo();
+      }
       break;
 
     case IDM_EDIT_CUT:
@@ -308,6 +332,9 @@ BOOL onCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct) {
           (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
       0, 0, 0, 0, hWnd, (HMENU)IDC_INPUT, global::hInst, NULL);
   SendMessageW(global::hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
+  mySetWindowLongW(global::hInput, GWL_USERDATA,
+                   mySetWindowLongW(global::hInput, GWL_WNDPROC, wproc::inputProc));
+  global::inputHistory.reset(global::hInput);
 
   // Program output
   global::hOutput = CreateWindowExW(
@@ -464,9 +491,14 @@ void onInitMenuPopup(HWND hWnd, HMENU hMenu, UINT item, BOOL fSystemMenu) {
   if (global::state == global::STATE_INIT) {
     ui::enableMenus(IDM_FILE_NEW, true);
     ui::enableMenus(IDM_FILE_OPEN, true);
-    ui::enableMenus(IDM_EDIT_UNDO, global::validHistory && global::historyIndex > 0);
-    ui::enableMenus(IDM_EDIT_REDO,
-                    global::validHistory && global::historyIndex < (int)global::history.size() - 1);
+    ui::enableMenus(IDM_EDIT_UNDO, global::hFocused == global::hEditor ? global::history.canUndo()
+                                   : global::hFocused == global::hInput
+                                       ? global::inputHistory.canUndo()
+                                       : false);
+    ui::enableMenus(IDM_EDIT_REDO, global::hFocused == global::hEditor ? global::history.canRedo()
+                                   : global::hFocused == global::hInput
+                                       ? global::inputHistory.canRedo()
+                                       : false);
     ui::enableMenus(IDM_BF_MEMTYPE_UNSIGNED, true);
     ui::enableMenus(IDM_BF_OUTPUT_HEX, true);
     ui::enableMenus(IDM_BF_INPUT_HEX, true);

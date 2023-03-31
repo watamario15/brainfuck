@@ -7,8 +7,11 @@ namespace wproc {
 // Window procedure for the main window.
 LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPARAM lParam);
 
-// Hook window procedure for the program editor that manages the undo/redo history.
+// Hook window procedure for the program editor to support the undo feature.
 LRESULT CALLBACK editorProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
+
+// Hook window procedure for the input editor to support the undo feature.
+LRESULT CALLBACK inputProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam);
 
 // Hook window procedure for the edit control in the memory view options dialog.
 // This procedure translates top row character keys to numbers according to the keyboard layout of

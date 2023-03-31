@@ -4,14 +4,6 @@
 #include "wproc.hpp"
 
 namespace ui {
-void undo() {
-  // TODO
-}
-
-void redo() {
-  // TODO
-}
-
 void enableMenus(unsigned endID, bool enable) {
   unsigned i;
   for (i = (endID / 10) * 10; i <= endID; ++i) {
@@ -164,6 +156,7 @@ void switchWordwrap() {
   SendMessageW(global::hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
   mySetWindowLongW(global::hEditor, GWL_USERDATA,
                    mySetWindowLongW(global::hEditor, GWL_WNDPROC, wproc::editorProc));
+  global::history.changeEditor(global::hEditor);
 
   // Program input
   global::hInput = CreateWindowExW(
@@ -172,6 +165,9 @@ void switchWordwrap() {
           (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
       0, 0, 0, 0, global::hWnd, (HMENU)IDC_INPUT, global::hInst, NULL);
   SendMessageW(global::hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
+  mySetWindowLongW(global::hInput, GWL_USERDATA,
+                   mySetWindowLongW(global::hInput, GWL_WNDPROC, wproc::inputProc));
+  global::inputHistory.changeEditor(global::hInput);
 
   // Program output
   global::hOutput = CreateWindowExW(
@@ -209,6 +205,20 @@ void switchLayout() {
   global::horizontal = !global::horizontal;
 
   msg::onSize(global::hWnd);
+}
+
+void updateTitle() {
+  std::wstring title;
+
+  title += L"[";
+  title += global::wstrFileName.empty()
+               ? L"New File"
+               : global::wstrFileName.substr(global::wstrFileName.rfind(L'\\') + 1);
+  title += global::history.isSaved() ? L"] - " : L" *] - ";
+
+  title += APP_NAME;
+
+  SetWindowTextW(global::hWnd, title.c_str());
 }
 
 void chooseFont() {
@@ -251,8 +261,7 @@ void chooseFont() {
 }
 
 bool promptSave() {
-  if (global::validHistory && global::historyIndex == global::savedIndex) return true;
-  if (!global::validHistory && SendMessageW(global::hEditor, EM_GETMODIFY, 0, 0) == 0) return true;
+  if (global::history.isSaved()) return true;
 
   int ret =
       util::messageBox(global::hWnd, global::hInst, L"Unsaved data will be lost. Save changes?",
@@ -281,28 +290,11 @@ void openFile(bool newFile, const wchar_t *fileName) {
 
   if (newFile) {  // new
     SetWindowTextW(global::hEditor, L"");
-    SetWindowTextW(global::hWnd, APP_NAME);
-    SendMessageW(global::hEditor, EM_SETMODIFY, FALSE, 0);
+    updateTitle();
     global::wstrFileName = L"";
     global::withBOM = false;
     global::newLine = util::NEWLINE_CRLF;
-
-    while (!global::history.empty()) {
-      free(global::history.back());
-      global::history.pop_back();
-    }
-    wchar_t *wcEditor = (wchar_t *)calloc(1, sizeof(wchar_t));
-    if (!wcEditor) {
-      util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                       MB_ICONWARNING);
-      global::historyIndex = 0;
-      global::savedIndex = -1;
-      global::validHistory = false;
-      return;
-    }
-    global::history.push_back(wcEditor);
-    global::historyIndex = global::savedIndex = 0;
-    global::validHistory = true;
+    global::history.reset(global::hEditor);
     return;
   }
 
@@ -369,35 +361,13 @@ void openFile(bool newFile, const wchar_t *fileName) {
   global::newLine = util::convertCRLF(converted, util::NEWLINE_CRLF);
 
   SetWindowTextW(global::hEditor, converted.c_str());
-  SendMessageW(global::hEditor, EM_SETMODIFY, FALSE, 0);
   global::wstrFileName = fileName;
   global::withBOM = padding != 0;
-
-  while (!global::history.empty()) {
-    free(global::history.back());
-    global::history.pop_back();
-  }
-  wchar_t *wcEditor = (wchar_t *)calloc(converted.size() + 1, sizeof(wchar_t));
-  if (!wcEditor) {
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
-    global::historyIndex = 0;
-    global::savedIndex = -1;
-    global::validHistory = false;
-    return;
-  }
-  wcscpy(wcEditor, converted.c_str());
-  global::history.push_back(wcEditor);
-  global::historyIndex = global::savedIndex = 0;
-  global::validHistory = true;
+  global::history.reset(global::hEditor, converted.c_str());
 
   SetWindowTextW(global::hOutput, NULL);
   SetWindowTextW(global::hMemView, NULL);
-
-  std::wstring title = L"[";
-  title.append(global::wstrFileName.substr(global::wstrFileName.rfind(L'\\') + 1) +
-               L"] - " APP_NAME);
-  SetWindowTextW(global::hWnd, title.c_str());
+  updateTitle();
 }
 
 bool saveFile(bool isOverwrite) {
@@ -459,14 +429,9 @@ bool saveFile(bool isOverwrite) {
   CloseHandle(hFile);
   free(szEditor);
 
-  if (global::validHistory) global::savedIndex = global::historyIndex;
-  SendMessageW(global::hEditor, EM_SETMODIFY, FALSE, 0);
+  global::history.setSaved();
   global::wstrFileName = wcFileName;
-
-  std::wstring title = L"[";
-  title.append(global::wstrFileName.substr(global::wstrFileName.rfind(L'\\') + 1) +
-               L"] - " APP_NAME);
-  SetWindowTextW(global::hWnd, title.c_str());
+  updateTitle();
 
   return true;
 }

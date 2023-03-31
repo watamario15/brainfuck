@@ -126,6 +126,7 @@ menu MENU
 accel ACCELERATORS
 {
   "^A", IDM_EDIT_SELALL
+  "^Y", IDM_EDIT_REDO
 }
 
 

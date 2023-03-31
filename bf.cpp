@@ -8,14 +8,23 @@
 #include <windows.h>
 
 void Brainfuck::reset() {
+  if (Brainfuck::program) {
+    free(Brainfuck::program);
+    Brainfuck::program = NULL;
+  }
   progIndex = 0;
+  if (Brainfuck::input) {
+    free(Brainfuck::input);
+    Brainfuck::input = NULL;
+  }
   inIndex = 0;
   memset(memory, 0, sizeof(memory));
   memIndex = 0;
   memLen = 1;
 }
 
-void Brainfuck::reset(unsigned progLen, const wchar_t *program, unsigned inLen, const void *input) {
+void Brainfuck::reset(unsigned progLen, wchar_t *program, unsigned inLen, void *input) {
+  if (Brainfuck::program) free(Brainfuck::program);
   if (progLen == 0 || !program) {
     Brainfuck::program = NULL;
     Brainfuck::progLen = 0;
@@ -25,11 +34,12 @@ void Brainfuck::reset(unsigned progLen, const wchar_t *program, unsigned inLen, 
   }
   progIndex = 0;
 
+  if (Brainfuck::input) free(Brainfuck::input);
   if (inLen == 0 || !input) {
     Brainfuck::input = NULL;
     Brainfuck::inLen = 0;
   } else {
-    Brainfuck::input = (const unsigned char *)input;
+    Brainfuck::input = (unsigned char *)input;
     Brainfuck::inLen = inLen;
   }
   inIndex = 0;

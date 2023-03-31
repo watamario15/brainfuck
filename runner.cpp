@@ -14,8 +14,6 @@ static class SJISTokenizer sjisTokenizer;
 static bool prevCR = false;
 
 bool bfInit() {
-  static unsigned char *input = NULL;
-  static wchar_t *program = NULL;
   int inLen;
 
   int inputSize = GetWindowTextLengthW(global::hInput) + 1;
@@ -28,20 +26,20 @@ bool bfInit() {
     return false;
   }
 
-  unsigned char *newInput;
+  unsigned char *input;
   if (global::inCharSet == IDM_BF_INPUT_HEX) {
-    if (!util::parseHex(global::hWnd, global::hInst, wcInput, &newInput, &inLen)) return false;
+    if (!util::parseHex(global::hWnd, global::hInst, wcInput, &input, &inLen)) return false;
   } else {
     int codePage = (global::inCharSet == IDM_BF_INPUT_SJIS) ? 932 : CP_UTF8;
     inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, NULL, 0, NULL, NULL);
-    newInput = (unsigned char *)malloc(inLen);
-    if (!newInput) {
+    input = (unsigned char *)malloc(inLen);
+    if (!input) {
       util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
                        MB_ICONWARNING);
       free(wcInput);
       return false;
     }
-    WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)newInput, inLen, NULL, NULL);
+    WideCharToMultiByte(codePage, 0, wcInput, -1, (char *)input, inLen, NULL, NULL);
     inLen--;
   }
 
@@ -60,7 +58,7 @@ bool bfInit() {
   } else {
     util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
                      MB_ICONWARNING);
-    free(newInput);
+    free(input);
     return false;
   }
 
@@ -69,10 +67,6 @@ bool bfInit() {
   SetWindowTextW(global::hOutput, NULL);
   SetWindowTextW(global::hMemView, NULL);
   prevCR = false;
-  if (input) free(input);
-  if (program) free(program);
-  input = newInput;
-  program = wcEditor;
 
   return true;
 }

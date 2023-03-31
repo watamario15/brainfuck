@@ -4,7 +4,7 @@
 #ifndef BF_HPP_
 #define BF_HPP_
 
-#include <stddef.h>
+#include <stdlib.h>
 
 class Brainfuck {
  public:
@@ -26,9 +26,11 @@ class Brainfuck {
     reset();
   }
 
-  // Initializes the internal state and registers a program and an _input.
+  // Initializes the internal state and registers a program and an input.
   // You must call reset() whenever you want to modify the program and the input.
-  Brainfuck(unsigned progLen, const wchar_t *program, unsigned inLen, const void *input)
+  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module
+  // takes care of it.
+  Brainfuck(unsigned progLen, wchar_t *program, unsigned inLen, void *input)
       : program(NULL),
         input(NULL),
         memLen(1),
@@ -39,12 +41,19 @@ class Brainfuck {
     reset(progLen, program, inLen, input);
   }
 
+  ~Brainfuck() {
+    if (program) free(program);
+    if (input) free(input);
+  }
+
   // Resets the internal state.
   void reset();
 
-  // Resets the internal state and registers a program and an _input.
+  // Resets the internal state and registers a program and an input.
   // You must call reset() whenever you want to modify the program and the input.
-  void reset(unsigned progLen, const wchar_t *program, unsigned inLen, const void *input);
+  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module
+  // takes care of it.
+  void reset(unsigned progLen, wchar_t *program, unsigned inLen, void *input);
 
   // Change implementation-defined behaviors.
   // If wrapInt is false, next() throws an exception when overflowed or underflowed.
@@ -55,12 +64,12 @@ class Brainfuck {
   void setBehavior(enum noinput_t noInput = NOINPUT_ZERO, bool wrapInt = true,
                    bool signedness = true, bool debug = false);
 
-  // Executes the next code, and writes its output on `_output` if any.
+  // Executes the next code, and writes its output on `output` if any.
   // Returns the result of an execution, which is running, breakpoint, finished, and
   // error.
   enum result_t next(unsigned char *output, bool *didOutput);
 
-  // Returns the memory and writes its size to `_size`.
+  // Returns the memory and writes its size to `size`.
   // The returned content becomes invalid on reset() and next().
   const unsigned char *getMemory(unsigned *size) {
     *size = memLen;
@@ -77,8 +86,8 @@ class Brainfuck {
   const wchar_t *getLastError() { return lastError; }
 
  private:
-  const wchar_t *program;       // Program
-  const unsigned char *input;   // Input stream
+  wchar_t *program;             // Program
+  unsigned char *input;         // Input stream
   unsigned char memory[65536];  // Memory
   unsigned memIndex, progIndex, inIndex, progLen, inLen, memLen;
   bool wrapInt, signedness, debug;

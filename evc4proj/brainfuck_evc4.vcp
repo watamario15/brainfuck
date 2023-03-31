@@ -108,9 +108,17 @@ DEP_CPP_BF_CP=\
 # End Source File
 # Begin Source File
 
+SOURCE=..\history.cpp
+DEP_CPP_HISTO=\
+	"..\history.hpp"\
+	
+# End Source File
+# Begin Source File
+
 SOURCE=..\main.cpp
 DEP_CPP_MAIN_=\
 	"..\bf.hpp"\
+	"..\history.hpp"\
 	"..\main.hpp"\
 	"..\msg.hpp"\
 	"..\resource.h"\
@@ -124,6 +132,7 @@ DEP_CPP_MAIN_=\
 SOURCE=..\msg.cpp
 DEP_CPP_MSG_C=\
 	"..\bf.hpp"\
+	"..\history.hpp"\
 	"..\main.hpp"\
 	"..\msg.hpp"\
 	"..\resource.h"\
@@ -138,6 +147,7 @@ DEP_CPP_MSG_C=\
 SOURCE=..\runner.cpp
 DEP_CPP_RUNNE=\
 	"..\bf.hpp"\
+	"..\history.hpp"\
 	"..\main.hpp"\
 	"..\resource.h"\
 	"..\runner.hpp"\
@@ -158,6 +168,7 @@ DEP_CPP_TOKEN=\
 SOURCE=..\ui.cpp
 DEP_CPP_UI_CP=\
 	"..\bf.hpp"\
+	"..\history.hpp"\
 	"..\main.hpp"\
 	"..\msg.hpp"\
 	"..\resource.h"\
@@ -178,6 +189,7 @@ DEP_CPP_UTIL_=\
 SOURCE=..\wproc.cpp
 DEP_CPP_WPROC=\
 	"..\bf.hpp"\
+	"..\history.hpp"\
 	"..\main.hpp"\
 	"..\msg.hpp"\
 	"..\resource.h"\
@@ -193,6 +205,10 @@ DEP_CPP_WPROC=\
 # Begin Source File
 
 SOURCE=..\bf.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\history.hpp
 # End Source File
 # Begin Source File
 

@@ -22,9 +22,6 @@ int speed = 10;                       // Brainfuck execution speed.
 int outCharSet = IDM_BF_OUTPUT_UTF8;  // Brainfuck stdout charset.
 int inCharSet = IDM_BF_INPUT_UTF8;    // Brainfuck stdin charset.
 int memViewStart = 0;                 // First address of the memory view (0-indexed byte).
-int historyIndex = 0;                 // Index to the current state in the undo/redo history.
-int savedIndex = 0;                   // Index to the saved state in the undo/redo history.
-bool validHistory = true;             // Whether the undo/redo history is valid.
 bool signedness = true;               // Signedness of the Brainfuck memory. True for signed.
 bool wrapInt = true;                  // Whether to wrap around an integer in Brainfuck.
 bool breakpoint = false;              // Whether to enable breakpoints in Brainfuck.
@@ -34,8 +31,9 @@ bool horizontal = false;              // Layout for this app.
 bool withBOM = false;                 // Whether the opened file contained an UTF-8 BOM.
 bool wordwrap = true;                 // Whether to enable the word wrap on editors.
 wchar_t *cmdLine;                     // Pointer to the command line.
-std::deque<wchar_t *> history;        // Undo/Redo history.
 std::wstring wstrFileName;            // Current file name.
+class History history;                // Program undo/redo history.
+class History inputHistory;           // Input undo/redo history.
 enum Brainfuck::noinput_t noInput = Brainfuck::NOINPUT_ZERO;  // Brainfuck behavior on no input.
 enum util::newline_t newLine = util::NEWLINE_CRLF;            // Newline code for the current file.
 enum state_t state = STATE_INIT;                              // Current state of this app.

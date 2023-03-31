@@ -25,12 +25,12 @@
 #include <process.h>
 #endif
 
-#include <deque>
 #include <string>
 
 #include "bf.hpp"
 #include "resource.h"
 #include "util.hpp"
+#include "history.hpp"
 
 // Workaround for wrong macro definitions in CeGCC.
 #ifdef UNDER_CE
@@ -95,7 +95,6 @@ typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYP
   WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
 #endif
 #define WM_APP_THREADEND WM_APP
-#define MAX_HISTORY 32
 
 namespace global {
 enum state_t { STATE_INIT, STATE_RUN, STATE_PAUSE, STATE_FINISH };
@@ -115,9 +114,6 @@ extern int speed;
 extern int outCharSet;
 extern int inCharSet;
 extern int memViewStart;
-extern int historyIndex;
-extern int savedIndex;
-extern bool validHistory;
 extern bool signedness;
 extern bool wrapInt;
 extern bool breakpoint;
@@ -127,8 +123,9 @@ extern bool horizontal;
 extern bool withBOM;
 extern bool wordwrap;
 extern wchar_t *cmdLine;
-extern std::deque<wchar_t *> history;
 extern std::wstring wstrFileName;
+extern class History history;
+extern class History inputHistory;
 extern Brainfuck::noinput_t noInput;
 extern enum util::newline_t newLine;
 extern enum state_t state;

@@ -4,6 +4,7 @@
 
 #include "msg.hpp"
 #include "runner.hpp"
+#include "ui.hpp"
 
 namespace wproc {
 LRESULT CALLBACK wndProc(HWND hWnd, unsigned int uMsg, WPARAM wParam, LPARAM lParam) {
@@ -65,47 +66,27 @@ LRESULT CALLBACK editorProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lPar
   static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
 
   switch (uMsg) {
-    case WM_CHAR: {
-      if (!global::validHistory) break;
+    case EM_UNDO:
+      global::history.undo();
+      ui::updateTitle();
+      return 0;
 
-      int editorSize = GetWindowTextLengthW(global::hEditor) + 1;
-      wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
-      if (!wcEditor) {
-        util::messageBox(hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                         MB_ICONWARNING);
-        while (!global::history.empty()) {
-          free(global::history.back());
-          global::history.pop_back();
-        }
-        global::historyIndex = 0;
-        global::savedIndex = -1;
-        global::validHistory = false;
-        break;
-      }
-      GetWindowTextW(global::hEditor, wcEditor, editorSize);
+    case WM_DESTROY:
+      mySetWindowLongW(hWnd, GWL_WNDPROC, prevWndProc);
+      return 0;
+  }
 
-      if (!global::history.empty() && !wcscmp(global::history[global::historyIndex], wcEditor)) {
-        free(wcEditor);
-        break;
-      }
+  return CallWindowProcW(prevWndProc, hWnd, uMsg, wParam, lParam);
+}
 
-      int toRemove = (int)global::history.size() - global::historyIndex - 1, i = 0;
-      for (; i < toRemove; ++i) {
-        free(global::history.back());
-        global::history.pop_back();
-      }
+LRESULT CALLBACK inputProc(HWND hWnd, unsigned uMsg, WPARAM wParam, LPARAM lParam) {
+  static WNDPROC prevWndProc = (WNDPROC)myGetWindowLongW(hWnd, GWL_USERDATA);
 
-      if (global::history.size() >= MAX_HISTORY) {
-        free(global::history.front());
-        global::history.pop_front();
-        --global::historyIndex;
-        if (global::savedIndex >= 0) --global::savedIndex;
-      }
-
-      global::history.push_back(wcEditor);
-      ++global::historyIndex;
-      break;
-    }
+  switch (uMsg) {
+    case EM_UNDO:
+      global::inputHistory.undo();
+      ui::updateTitle();
+      return 0;
 
     case WM_DESTROY:
       mySetWindowLongW(hWnd, GWL_WNDPROC, prevWndProc);

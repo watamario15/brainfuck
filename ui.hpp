@@ -4,9 +4,6 @@
 #include "main.hpp"
 
 namespace ui {
-void undo();
-void redo();
-
 // Enables/Disables menu items from the smaller nearest 10 multiple to `_endID`.
 void enableMenus(unsigned endID, bool enable);
 
@@ -37,6 +34,9 @@ void switchTheme();
 
 // Switches between horizontal/portrait layout.
 void switchLayout();
+
+// Sets the title of the main window.
+void updateTitle();
 
 // Opens a font dialog and applies it on editors.
 void chooseFont();

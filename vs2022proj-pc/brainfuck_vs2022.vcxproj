@@ -354,6 +354,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\bf.cpp" />
+    <ClCompile Include="..\history.cpp" />
     <ClCompile Include="..\main.cpp" />
     <ClCompile Include="..\msg.cpp" />
     <ClCompile Include="..\runner.cpp" />
@@ -364,6 +365,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\bf.hpp" />
+    <ClInclude Include="..\history.hpp" />
     <ClInclude Include="..\main.hpp" />
     <ClInclude Include="..\msg.hpp" />
     <ClInclude Include="..\resource.h" />

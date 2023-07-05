@@ -63,8 +63,7 @@ const wchar_t *UTF8Tokenizer::add(unsigned char chr) {
     // Completed one character.
     if (state == 0) {
       memset(result, 0, sizeof(result));
-      MultiByteToWideChar(CP_UTF8, 0, (char *)token, -1, result,
-                          sizeof(result) / sizeof(result[0]));
+      MultiByteToWideChar(CP_UTF8, 0, (char *)token, -1, result, sizeof(result) / sizeof(result[0]));
       index = 0;
       return result;
     }
@@ -121,8 +120,7 @@ const wchar_t *SJISTokenizer::add(unsigned char chr) {
   // Completed one character.
   const unsigned char character[2] = {token, chr};
   memset(result, 0, sizeof(result));
-  MultiByteToWideChar(932, 0, (const char *)character, 2, result,
-                      sizeof(result) / sizeof(result[0]));
+  MultiByteToWideChar(932, 0, (const char *)character, 2, result, sizeof(result) / sizeof(result[0]));
   token = 0;
   return result;
 }

@@ -16,28 +16,15 @@ class Brainfuck {
 
   // Initializes the internal state.
   Brainfuck()
-      : program(NULL),
-        input(NULL),
-        memLen(1),
-        wrapInt(true),
-        signedness(true),
-        debug(false),
-        noInput(NOINPUT_ZERO) {
+      : program(NULL), input(NULL), memLen(1), wrapInt(true), signedness(true), debug(false), noInput(NOINPUT_ZERO) {
     reset();
   }
 
   // Initializes the internal state and registers a program and an input.
   // You must call reset() whenever you want to modify the program and the input.
-  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module
-  // takes care of it.
+  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module takes care of it.
   Brainfuck(unsigned progLen, wchar_t *program, unsigned inLen, void *input)
-      : program(NULL),
-        input(NULL),
-        memLen(1),
-        wrapInt(true),
-        signedness(true),
-        debug(false),
-        noInput(NOINPUT_ZERO) {
+      : program(NULL), input(NULL), memLen(1), wrapInt(true), signedness(true), debug(false), noInput(NOINPUT_ZERO) {
     reset(progLen, program, inLen, input);
   }
 
@@ -51,22 +38,20 @@ class Brainfuck {
 
   // Resets the internal state and registers a program and an input.
   // You must call reset() whenever you want to modify the program and the input.
-  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module
-  // takes care of it.
+  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module takes care of it.
   void reset(unsigned progLen, wchar_t *program, unsigned inLen, void *input);
 
   // Change implementation-defined behaviors.
   // If wrapInt is false, next() throws an exception when overflowed or underflowed.
   // If wrapInt is true, signedness doen't have any effect.
   // If debug is true, breakpoint instruction ("@") is enabled.
-  // The default behavior is [zero for no input, wrap around integer, signed integer (no effects in
-  // this case), no debug].
-  void setBehavior(enum noinput_t noInput = NOINPUT_ZERO, bool wrapInt = true,
-                   bool signedness = true, bool debug = false);
+  // The default behavior is [zero for no input, wrap around integer, signed integer (no effects in this case), no
+  // debug].
+  void setBehavior(enum noinput_t noInput = NOINPUT_ZERO, bool wrapInt = true, bool signedness = true,
+                   bool debug = false);
 
   // Executes the next code, and writes its output on `output` if any.
-  // Returns the result of an execution, which is running, breakpoint, finished, and
-  // error.
+  // Returns the result of an execution, which is running, breakpoint, finished, and error.
   enum result_t next(unsigned char *output, bool *didOutput);
 
   // Returns the memory and writes its size to `size`.

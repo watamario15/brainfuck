@@ -28,9 +28,9 @@
 #include <string>
 
 #include "bf.hpp"
+#include "history.hpp"
 #include "resource.h"
 #include "util.hpp"
-#include "history.hpp"
 
 // Workaround for wrong macro definitions in CeGCC.
 #ifdef UNDER_CE
@@ -71,8 +71,8 @@ typedef enum MONITOR_DPI_TYPE {
 } MONITOR_DPI_TYPE;
 
 // The function pointer type for GetDpiForMonitor API.
-typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType,
-                                              unsigned *dpiX, unsigned *dpiY);
+typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, unsigned *dpiX,
+                                              unsigned *dpiY);
 #endif
 
 // Making SetWindowLongW and GetWindowLongW compatible for both 32-bit and 64-bit system.
@@ -91,8 +91,7 @@ typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYP
 #endif
 
 #ifndef WS_OVERLAPPEDWINDOW
-#define WS_OVERLAPPEDWINDOW \
-  WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+#define WS_OVERLAPPEDWINDOW WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
 #endif
 #define WM_APP_THREADEND WM_APP
 

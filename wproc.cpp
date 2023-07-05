@@ -170,8 +170,7 @@ INT_PTR CALLBACK memViewProc(HWND hDlg, unsigned uMsg, WPARAM wParam, LPARAM lPa
 
       wchar_t editBuf[10];
       HWND hEdit = GetDlgItem(hDlg, 3);
-      wsprintfW(editBuf, L"%u",
-                global::memViewStart <= 999999999 ? global::memViewStart : 999999999);
+      wsprintfW(editBuf, L"%u", global::memViewStart <= 999999999 ? global::memViewStart : 999999999);
       SendDlgItemMessageW(hDlg, 3, EM_SETLIMITTEXT, 9, 0);
       SetDlgItemTextW(hDlg, 3, editBuf);
       mySetWindowLongW(hEdit, GWL_USERDATA, mySetWindowLongW(hEdit, GWL_WNDPROC, memViewDlgEditor));

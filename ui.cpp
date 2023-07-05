@@ -23,9 +23,7 @@ void setState(enum global::state_t state, bool force) {
     SendMessageW(global::hEditor, EM_SETREADONLY, (WPARAM)FALSE, (LPARAM)NULL);
     SendMessageW(global::hInput, EM_SETREADONLY, (WPARAM)FALSE, (LPARAM)NULL);
     SendMessageW(global::hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < SCRKBD_LEN; ++i) {
-      EnableWindow(global::hScrKB[i], TRUE);
-    }
+    for (i = 0; i < SCRKBD_LEN; ++i) EnableWindow(global::hScrKB[i], TRUE);
 #ifndef UNDER_CE
     DragAcceptFiles(global::hWnd, TRUE);
 #endif
@@ -37,9 +35,7 @@ void setState(enum global::state_t state, bool force) {
     SendMessageW(global::hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(global::hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(global::hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < SCRKBD_LEN; ++i) {
-      EnableWindow(global::hScrKB[i], FALSE);
-    }
+    for (i = 0; i < SCRKBD_LEN; ++i) EnableWindow(global::hScrKB[i], FALSE);
 #ifndef UNDER_CE
     DragAcceptFiles(global::hWnd, FALSE);
 #endif
@@ -51,9 +47,7 @@ void setState(enum global::state_t state, bool force) {
     SendMessageW(global::hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(global::hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(global::hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < SCRKBD_LEN; ++i) {
-      EnableWindow(global::hScrKB[i], FALSE);
-    }
+    for (i = 0; i < SCRKBD_LEN; ++i) EnableWindow(global::hScrKB[i], FALSE);
 #ifndef UNDER_CE
     DragAcceptFiles(global::hWnd, FALSE);
 #endif
@@ -65,9 +59,7 @@ void setState(enum global::state_t state, bool force) {
     SendMessageW(global::hEditor, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(global::hInput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
     SendMessageW(global::hOutput, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)NULL);
-    for (i = 0; i < SCRKBD_LEN; ++i) {
-      EnableWindow(global::hScrKB[i], FALSE);
-    }
+    for (i = 0; i < SCRKBD_LEN; ++i) EnableWindow(global::hScrKB[i], FALSE);
 #ifndef UNDER_CE
     DragAcceptFiles(global::hWnd, FALSE);
 #endif
@@ -114,8 +106,7 @@ void switchWordwrap() {
   int editorSize = GetWindowTextLengthW(global::hEditor) + 1;
   wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
   if (!wcEditor) {
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
   GetWindowTextW(global::hEditor, wcEditor, editorSize);
@@ -126,8 +117,7 @@ void switchWordwrap() {
   wchar_t *wcInput = (wchar_t *)malloc(sizeof(wchar_t) * inputSize);
   if (!wcInput) {
     free(wcEditor);
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
   GetWindowTextW(global::hInput, wcInput, inputSize);
@@ -138,8 +128,7 @@ void switchWordwrap() {
   if (!wcOutput) {
     free(wcEditor);
     free(wcInput);
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
   GetWindowTextW(global::hOutput, wcOutput, outputSize);
@@ -148,33 +137,30 @@ void switchWordwrap() {
   global::wordwrap = !global::wordwrap;
 
   // Program editor
-  global::hEditor = CreateWindowExW(
-      0, L"EDIT", L"",
-      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL |
-          (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
-      0, 0, 0, 0, global::hWnd, (HMENU)IDC_EDITOR, global::hInst, NULL);
+  global::hEditor =
+      CreateWindowExW(0, L"EDIT", L"",
+                      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL |
+                          (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
+                      0, 0, 0, 0, global::hWnd, (HMENU)IDC_EDITOR, global::hInst, NULL);
   SendMessageW(global::hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
-  mySetWindowLongW(global::hEditor, GWL_USERDATA,
-                   mySetWindowLongW(global::hEditor, GWL_WNDPROC, wproc::editorProc));
+  mySetWindowLongW(global::hEditor, GWL_USERDATA, mySetWindowLongW(global::hEditor, GWL_WNDPROC, wproc::editorProc));
   global::history.changeEditor(global::hEditor);
 
   // Program input
-  global::hInput = CreateWindowExW(
-      0, L"EDIT", L"",
-      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL |
-          (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
-      0, 0, 0, 0, global::hWnd, (HMENU)IDC_INPUT, global::hInst, NULL);
+  global::hInput = CreateWindowExW(0, L"EDIT", L"",
+                                   WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
+                                       WS_VSCROLL | (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
+                                   0, 0, 0, 0, global::hWnd, (HMENU)IDC_INPUT, global::hInst, NULL);
   SendMessageW(global::hInput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
-  mySetWindowLongW(global::hInput, GWL_USERDATA,
-                   mySetWindowLongW(global::hInput, GWL_WNDPROC, wproc::inputProc));
+  mySetWindowLongW(global::hInput, GWL_USERDATA, mySetWindowLongW(global::hInput, GWL_WNDPROC, wproc::inputProc));
   global::inputHistory.changeEditor(global::hInput);
 
   // Program output
-  global::hOutput = CreateWindowExW(
-      0, L"EDIT", L"",
-      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
-          WS_VSCROLL | (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
-      0, 0, 0, 0, global::hWnd, (HMENU)IDC_OUTPUT, global::hInst, NULL);
+  global::hOutput =
+      CreateWindowExW(0, L"EDIT", L"",
+                      WS_CHILD | WS_VISIBLE | WS_BORDER | ES_LEFT | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL |
+                          WS_VSCROLL | (global::wordwrap ? 0 : ES_AUTOHSCROLL | WS_HSCROLL) | ES_NOHIDESEL,
+                      0, 0, 0, 0, global::hWnd, (HMENU)IDC_OUTPUT, global::hInst, NULL);
   SendMessageW(global::hOutput, EM_SETLIMITTEXT, (WPARAM)-1, 0);
 
   global::hFocused = global::hEditor;
@@ -211,9 +197,8 @@ void updateTitle() {
   std::wstring title;
 
   title += L"[";
-  title += global::wstrFileName.empty()
-               ? L"New File"
-               : global::wstrFileName.substr(global::wstrFileName.rfind(L'\\') + 1);
+  title +=
+      global::wstrFileName.empty() ? L"New File" : global::wstrFileName.substr(global::wstrFileName.rfind(L'\\') + 1);
   title += global::history.isSaved() ? L"] - " : L" *] - ";
 
   title += APP_NAME;
@@ -248,8 +233,7 @@ void chooseFont() {
 #else
   if (ret) {
     // Re-converts to the 96 DPI value as we properly adjust it on the fly.
-    global::editFont.lfHeight =
-        (global::editFont.lfHeight * 96 - (global::sysDPI - 1)) / global::sysDPI;
+    global::editFont.lfHeight = (global::editFont.lfHeight * 96 - (global::sysDPI - 1)) / global::sysDPI;
     global::editFont.lfQuality = ANTIALIASED_QUALITY;
     msg::onSize(global::hWnd);
   } else {
@@ -263,24 +247,10 @@ void chooseFont() {
 bool promptSave() {
   if (global::history.isSaved()) return true;
 
-  int ret =
-      util::messageBox(global::hWnd, global::hInst, L"Unsaved data will be lost. Save changes?",
-                       L"Confirm", MB_ICONWARNING | MB_YESNOCANCEL);
+  int ret = util::messageBox(global::hWnd, global::hInst, L"Unsaved data will be lost. Save changes?", L"Confirm",
+                             MB_ICONWARNING | MB_YESNOCANCEL);
 
-  if (ret == IDCANCEL) {
-    return false;
-  } else if (ret == IDYES) {
-    if (saveFile(true)) {
-      return true;
-    } else {
-      return false;
-    }
-  } else if (ret == IDNO) {
-    return true;
-  }
-
-  // Shouldn't be reached.
-  return true;
+  return ret == IDCANCEL ? false : ret == IDYES ? saveFile(true) : true;
 }
 
 void openFile(bool newFile, const wchar_t *fileName) {
@@ -298,7 +268,7 @@ void openFile(bool newFile, const wchar_t *fileName) {
     return;
   }
 
-  if (!fileName) {
+  if (!fileName || !fileName[0]) {
     wchar_t initDir[MAX_PATH] = {0};
     if (!global::wstrFileName.empty()) {
       global::wstrFileName.substr(0, global::wstrFileName.rfind(L'\\')).copy(initDir, MAX_PATH - 1);
@@ -317,8 +287,7 @@ void openFile(bool newFile, const wchar_t *fileName) {
     fileName = wcFileName;
   }
 
-  HANDLE hFile = CreateFileW(fileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
-                             FILE_ATTRIBUTE_NORMAL, NULL);
+  HANDLE hFile = CreateFileW(fileName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
     util::messageBox(global::hWnd, global::hInst, L"Open failed.", L"Error", MB_ICONWARNING);
     return;
@@ -326,15 +295,13 @@ void openFile(bool newFile, const wchar_t *fileName) {
 
   DWORD fileSize = GetFileSize(hFile, NULL), readLen;
   if (fileSize >= 65536 * 2) {
-    util::messageBox(global::hWnd, global::hInst, L"This file is too large.", L"Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"This file is too large.", L"Error", MB_ICONWARNING);
     return;
   }
 
   char *fileBuf = (char *)malloc(sizeof(char) * fileSize);
   if (!fileBuf) {
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
 
@@ -348,8 +315,7 @@ void openFile(bool newFile, const wchar_t *fileName) {
   wchar_t *wcFileBuf = (wchar_t *)calloc(length + 1, sizeof(wchar_t));
   if (!wcFileBuf) {
     free(fileBuf);
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;
   }
 
@@ -376,8 +342,7 @@ bool saveFile(bool isOverwrite) {
   if (!isOverwrite || global::wstrFileName.empty()) {
     wchar_t initDir[MAX_PATH] = {0};
     if (!global::wstrFileName.empty()) {
-      global::wstrFileName.substr(global::wstrFileName.rfind(L'\\') + 1)
-          .copy(wcFileName, MAX_PATH - 1);
+      global::wstrFileName.substr(global::wstrFileName.rfind(L'\\') + 1).copy(wcFileName, MAX_PATH - 1);
       global::wstrFileName.substr(0, global::wstrFileName.rfind(L'\\')).copy(initDir, MAX_PATH - 1);
     }
     OPENFILENAMEW ofn;
@@ -398,8 +363,7 @@ bool saveFile(bool isOverwrite) {
   int editorSize = GetWindowTextLengthW(global::hEditor) + 1;
   wchar_t *wcEditor = (wchar_t *)malloc(sizeof(wchar_t) * editorSize);
   if (!wcEditor) {
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return false;
   }
   GetWindowTextW(global::hEditor, wcEditor, editorSize);
@@ -410,14 +374,13 @@ bool saveFile(bool isOverwrite) {
   int length = WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, NULL, 0, NULL, NULL);
   char *szEditor = (char *)malloc(sizeof(char) * length);
   if (!szEditor) {
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return false;
   }
   WideCharToMultiByte(CP_UTF8, 0, converted.c_str(), -1, szEditor, length, NULL, NULL);
 
-  HANDLE hFile = CreateFileW(wcFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
-                             FILE_ATTRIBUTE_NORMAL, NULL);
+  HANDLE hFile =
+      CreateFileW(wcFileName, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
   if (hFile == INVALID_HANDLE_VALUE) {
     util::messageBox(global::hWnd, global::hInst, L"Open failed.", L"Error", MB_ICONWARNING);
     return false;

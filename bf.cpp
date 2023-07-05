@@ -70,8 +70,7 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *output, bool *didOutput)
         ++memIndex;
         if (memIndex == memLen) ++memLen;
       } else {
-        wsprintfW(lastError, L"%u: Instruction '>' used when the memory pointer is 65535.",
-                  progIndex);
+        wsprintfW(lastError, L"%u: Instruction '>' used when the memory pointer is 65535.", progIndex);
         return RESULT_ERR;
       }
       break;
@@ -93,16 +92,14 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *output, bool *didOutput)
         if (memory[memIndex] != 0x7F) {
           ++memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 127.",
-                    progIndex);
+          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 127.", progIndex);
           return RESULT_ERR;
         }
       } else {
         if (memory[memIndex] != 0xFF) {
           ++memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 255.",
-                    progIndex);
+          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 255.", progIndex);
           return RESULT_ERR;
         }
       }
@@ -116,16 +113,14 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *output, bool *didOutput)
         if (memory[memIndex] != 0x80) {
           --memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is -128.",
-                    progIndex);
+          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is -128.", progIndex);
           return RESULT_ERR;
         }
       } else {
         if (memory[memIndex] != 0x00) {
           --memory[memIndex];
         } else {
-          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is 0.",
-                    progIndex);
+          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is 0.", progIndex);
           return RESULT_ERR;
         }
       }
@@ -143,8 +138,7 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *output, bool *didOutput)
         } else if (noInput == NOINPUT_FF) {
           memory[memIndex] = 255;
         } else {
-          wsprintfW(lastError, L"%u: Instruction ',' used when the input stream is empty.",
-                    progIndex);
+          wsprintfW(lastError, L"%u: Instruction ',' used when the input stream is empty.", progIndex);
           return RESULT_ERR;
         }
       } else {

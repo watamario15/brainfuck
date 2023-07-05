@@ -74,7 +74,7 @@ void History::add() {
 }
 
 void History::undo() {
- if (canUndo()) {
+  if (canUndo()) {
     DWORD selEnd;
     --historyIndex;
     SendMessageW(hEditor, EM_GETSEL, (WPARAM)NULL, (LPARAM)&selEnd);

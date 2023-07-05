@@ -2,21 +2,17 @@
 
 namespace util {
 #ifdef UNDER_CE
-int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t *lpCaption,
-               unsigned uType) {
+int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t *lpCaption, unsigned uType) {
   UNREFERENCED_PARAMETER(hInst);
   return MessageBoxW(hWnd, lpText, lpCaption, uType);
 }
 #else
 // The function pointer type for TaskDialog API.
-typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance,
-                                         const wchar_t *pszWindowTitle,
-                                         const wchar_t *pszMainInstruction,
-                                         const wchar_t *pszContent, int dwCommonButtons,
-                                         const wchar_t *pszIcon, int *pnButton);
+typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance, const wchar_t *pszWindowTitle,
+                                         const wchar_t *pszMainInstruction, const wchar_t *pszContent,
+                                         int dwCommonButtons, const wchar_t *pszIcon, int *pnButton);
 
-int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t *lpCaption,
-               unsigned uType) {
+int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t *lpCaption, unsigned uType) {
   // Tests whether uType uses some features that TaskDialog doesn't support.
   if (uType & ~(MB_ICONMASK | MB_TYPEMASK)) goto mbfallback;
 
@@ -80,8 +76,7 @@ mbfallback:
 }
 #endif
 
-bool parseHex(HWND hWnd, HINSTANCE hInst, const wchar_t *hexInput, unsigned char **dest,
-              int *length) {
+bool parseHex(HWND hWnd, HINSTANCE hInst, const wchar_t *hexInput, unsigned char **dest, int *length) {
   wchar_t hex[2];
   std::string tmp;
   int hexLen = 0, i;
@@ -93,30 +88,15 @@ bool parseHex(HWND hWnd, HINSTANCE hInst, const wchar_t *hexInput, unsigned char
         *dest = NULL;
         return false;
       }
-      if (hexInput[i] > L'Z') {  // Aligns to the upper case.
-        hex[hexLen++] = hexInput[i] - (L'a' - L'A');
-      } else {
-        hex[hexLen++] = hexInput[i];
-      }
+      // Aligns to the upper case.
+      hex[hexLen++] = hexInput[i] > L'Z' ? hexInput[i] - (L'a' - L'A') : hexInput[i];
     } else if (iswspace(hexInput[i]) || !hexInput[i]) {
       if (hexLen == 1) {
-        if (hex[0] < L'A') {
-          tmp += (char)(hex[0] - L'0');
-        } else {
-          tmp += (char)(hex[0] - L'A' + 10);
-        }
+        tmp += hex[0] < L'A' ? (char)(hex[0] - L'0') : (char)(hex[0] - L'A' + 10);
         hexLen = 0;
       } else if (hexLen == 2) {
-        if (hex[0] < L'A') {
-          tmp += (char)((hex[0] - L'0') << 4);
-        } else {
-          tmp += (char)((hex[0] - L'A' + 10) << 4);
-        }
-        if (hex[1] < L'A') {
-          tmp[tmp.size() - 1] += hex[1] - L'0';
-        } else {
-          tmp[tmp.size() - 1] += hex[1] - L'A' + 10;
-        }
+        tmp += hex[0] < L'A' ? (char)((hex[0] - L'0') << 4) : (char)((hex[0] - L'A' + 10) << 4);
+        tmp[tmp.size() - 1] += hex[1] < L'A' ? hex[1] - L'0' : hex[1] - L'A' + 10;
         hexLen = 0;
       }
     } else {
@@ -149,18 +129,8 @@ bool parseHex(HWND hWnd, HINSTANCE hInst, const wchar_t *hexInput, unsigned char
 void toHex(unsigned char num, wchar_t *dest) {
   unsigned char high = num >> 4, low = num & 0xF;
 
-  if (high < 10) {
-    dest[0] = L'0' + high;
-  } else {
-    dest[0] = L'A' + (high - 10);
-  }
-
-  if (low < 10) {
-    dest[1] = L'0' + low;
-  } else {
-    dest[1] = L'A' + (low - 10);
-  }
-
+  dest[0] = high < 10 ? L'0' + high : L'A' + (high - 10);
+  dest[1] = low < 10 ? L'0' + low : L'A' + (low - 10);
   dest[2] = L' ';
   dest[3] = 0;
 }
@@ -170,15 +140,7 @@ enum newline_t convertCRLF(std::wstring &target, enum newline_t newLine) {
   std::wstring::iterator iterEnd = target.end();
   std::wstring temp;
   size_t CRs = 0, LFs = 0, CRLFs = 0;
-
-  const wchar_t *nl;
-  if (newLine == NEWLINE_LF) {
-    nl = L"\n";
-  } else if (newLine == NEWLINE_CR) {
-    nl = L"\r";
-  } else {
-    nl = L"\r\n";
-  }
+  const wchar_t *nl = newLine == NEWLINE_LF ? L"\n" : newLine == NEWLINE_CR ? L"\r" : L"\r\n";
 
   if (0 < target.size()) {
     wchar_t bNextChar = *iter++;
@@ -215,8 +177,6 @@ enum newline_t convertCRLF(std::wstring &target, enum newline_t newLine) {
 
   target = temp;
 
-  return LFs > CRLFs && LFs >= CRs  ? NEWLINE_LF
-         : CRs > LFs && CRs > CRLFs ? NEWLINE_CR
-                                    : NEWLINE_CRLF;
+  return LFs > CRLFs && LFs >= CRs ? NEWLINE_LF : CRs > LFs && CRs > CRLFs ? NEWLINE_CR : NEWLINE_CRLF;
 }
 }  // namespace util

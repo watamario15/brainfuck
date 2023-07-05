@@ -108,11 +108,59 @@ DEP_CPP_BF_CP=\
 # End Source File
 # Begin Source File
 
+SOURCE=..\history.cpp
+DEP_CPP_HISTO=\
+	"..\history.hpp"\
+	
+# End Source File
+# Begin Source File
+
 SOURCE=..\main.cpp
 DEP_CPP_MAIN_=\
 	"..\bf.hpp"\
+	"..\history.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
 	"..\resource.h"\
+	"..\runner.hpp"\
+	"..\util.hpp"\
+	"..\wproc.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\msg.cpp
+DEP_CPP_MSG_C=\
+	"..\bf.hpp"\
+	"..\history.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
+	"..\resource.h"\
+	"..\runner.hpp"\
 	"..\ui.hpp"\
+	"..\util.hpp"\
+	"..\wproc.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\runner.cpp
+DEP_CPP_RUNNE=\
+	"..\bf.hpp"\
+	"..\history.hpp"\
+	"..\main.hpp"\
+	"..\resource.h"\
+	"..\runner.hpp"\
+	"..\tokenizer.hpp"\
+	"..\ui.hpp"\
+	"..\util.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\tokenizer.cpp
+DEP_CPP_TOKEN=\
+	"..\tokenizer.hpp"\
 	
 # End Source File
 # Begin Source File
@@ -120,8 +168,34 @@ DEP_CPP_MAIN_=\
 SOURCE=..\ui.cpp
 DEP_CPP_UI_CP=\
 	"..\bf.hpp"\
+	"..\history.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
 	"..\resource.h"\
 	"..\ui.hpp"\
+	"..\util.hpp"\
+	"..\wproc.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\util.cpp
+DEP_CPP_UTIL_=\
+	"..\util.hpp"\
+	
+# End Source File
+# Begin Source File
+
+SOURCE=..\wproc.cpp
+DEP_CPP_WPROC=\
+	"..\bf.hpp"\
+	"..\history.hpp"\
+	"..\main.hpp"\
+	"..\msg.hpp"\
+	"..\resource.h"\
+	"..\runner.hpp"\
+	"..\util.hpp"\
+	"..\wproc.hpp"\
 	
 # End Source File
 # End Group
@@ -134,11 +208,39 @@ SOURCE=..\bf.hpp
 # End Source File
 # Begin Source File
 
+SOURCE=..\history.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\main.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\msg.hpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\resource.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\runner.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\tokenizer.hpp
+# End Source File
+# Begin Source File
+
 SOURCE=..\ui.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\util.hpp
+# End Source File
+# Begin Source File
+
+SOURCE=..\wproc.hpp
 # End Source File
 # End Group
 # Begin Group "Resource Files"

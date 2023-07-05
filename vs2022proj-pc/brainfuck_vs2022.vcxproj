@@ -354,13 +354,26 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\bf.cpp" />
+    <ClCompile Include="..\history.cpp" />
     <ClCompile Include="..\main.cpp" />
+    <ClCompile Include="..\msg.cpp" />
+    <ClCompile Include="..\runner.cpp" />
+    <ClCompile Include="..\tokenizer.cpp" />
     <ClCompile Include="..\ui.cpp" />
+    <ClCompile Include="..\util.cpp" />
+    <ClCompile Include="..\wproc.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\bf.hpp" />
+    <ClInclude Include="..\history.hpp" />
+    <ClInclude Include="..\main.hpp" />
+    <ClInclude Include="..\msg.hpp" />
     <ClInclude Include="..\resource.h" />
+    <ClInclude Include="..\runner.hpp" />
+    <ClInclude Include="..\tokenizer.hpp" />
     <ClInclude Include="..\ui.hpp" />
+    <ClInclude Include="..\util.hpp" />
+    <ClInclude Include="..\wproc.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="..\app.ico" />

@@ -208,11 +208,35 @@
 				>
 			</File>
 			<File
+				RelativePath="..\history.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\main.cpp"
 				>
 			</File>
 			<File
+				RelativePath="..\msg.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\runner.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\tokenizer.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\ui.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\util.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\wproc.cpp"
 				>
 			</File>
 		</Filter>
@@ -226,11 +250,39 @@
 				>
 			</File>
 			<File
+				RelativePath="..\history.hpp"
+				>
+			</File>
+			<File
+				RelativePath="..\main.hpp"
+				>
+			</File>
+			<File
+				RelativePath="..\msg.hpp"
+				>
+			</File>
+			<File
 				RelativePath="..\resource.h"
 				>
 			</File>
 			<File
+				RelativePath="..\runner.hpp"
+				>
+			</File>
+			<File
+				RelativePath="..\tokenizer.hpp"
+				>
+			</File>
+			<File
 				RelativePath="..\ui.hpp"
+				>
+			</File>
+			<File
+				RelativePath="..\util.hpp"
+				>
+			</File>
+			<File
+				RelativePath="..\wproc.hpp"
 				>
 			</File>
 		</Filter>

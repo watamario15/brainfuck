@@ -4,80 +4,79 @@
 #ifndef BF_HPP_
 #define BF_HPP_
 
-#include <stddef.h>
-
-#include <vector>
+#include <stdlib.h>
 
 class Brainfuck {
  public:
-  // Defines a desired behavior for input instructions with no input.
+  // Used to define a desired behavior for the input instruction when no input is given.
   enum noinput_t { NOINPUT_ERROR, NOINPUT_ZERO, NOINPUT_FF };
 
   // Execution result returned from the next() function.
-  enum result_t { RESULT_RUN, RESULT_BREAK, RESULT_FIN };
+  enum result_t { RESULT_RUN, RESULT_BREAK, RESULT_FIN, RESULT_ERR };
 
   // Initializes the internal state.
   Brainfuck()
-      : program(NULL),
-        input(NULL),
-        wrapInt(true),
-        signedness(true),
-        debug(false),
-        noInput(NOINPUT_ZERO) {
-    memory.reserve(1000);
+      : program(NULL), input(NULL), memLen(1), wrapInt(true), signedness(true), debug(false), noInput(NOINPUT_ZERO) {
     reset();
   }
 
-  // Initializes the internal state and sets `_program` and `_input`.
-  // DO NOT CHANGE THE CONTENTS OF THEM. You must call reset() when you update them.
-  Brainfuck(size_t _progLen, const wchar_t *_program, size_t _inLen, const void *_input)
-      : program(NULL),
-        input(NULL),
-        wrapInt(true),
-        signedness(true),
-        debug(false),
-        noInput(NOINPUT_ZERO) {
-    memory.reserve(30000);
-    reset(_progLen, _program, _inLen, _input);
+  // Initializes the internal state and registers a program and an input.
+  // You must call reset() whenever you want to modify the program and the input.
+  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module takes care of it.
+  Brainfuck(unsigned progLen, wchar_t *program, unsigned inLen, void *input)
+      : program(NULL), input(NULL), memLen(1), wrapInt(true), signedness(true), debug(false), noInput(NOINPUT_ZERO) {
+    reset(progLen, program, inLen, input);
+  }
+
+  ~Brainfuck() {
+    if (program) free(program);
+    if (input) free(input);
   }
 
   // Resets the internal state.
   void reset();
 
-  // Resets the internal state and copies `_program` and `_input`.
-  // DO NOT CHANGE THE CONTENTS OF THEM. You must call reset() when you update them.
-  void reset(size_t _progLen, const wchar_t *_program, size_t _inLen, const void *_input);
+  // Resets the internal state and registers a program and an input.
+  // You must call reset() whenever you want to modify the program and the input.
+  // Pass a program and an input as dedicated malloc()-ed data and don't free() them. This module takes care of it.
+  void reset(unsigned progLen, wchar_t *program, unsigned inLen, void *input);
 
   // Change implementation-defined behaviors.
-  // When wrapInt is false, `next` throws an exception on an overflow/underflow.
-  // When wrapInt is true, signedness doen't have any effect.
-  // When debug is true, breakpoint instruction (@) is enabled.
-  // Default options are, zero for no input, wrap around integer, signed integer (no effect here),
-  // and no debug.
-  void setBehavior(enum noinput_t _noInput = NOINPUT_ZERO, bool _wrapInt = true,
-                   bool _signedness = true, bool _debug = false);
+  // If wrapInt is false, next() throws an exception when overflowed or underflowed.
+  // If wrapInt is true, signedness doen't have any effect.
+  // If debug is true, breakpoint instruction ("@") is enabled.
+  // The default behavior is [zero for no input, wrap around integer, signed integer (no effects in this case), no
+  // debug].
+  void setBehavior(enum noinput_t noInput = NOINPUT_ZERO, bool wrapInt = true, bool signedness = true,
+                   bool debug = false);
 
   // Executes the next code, and writes its output on `output` if any.
-  // A return value is the result of an execution, which is running, breakpoint, and finished.
-  // Throws `std::invalid_argument` when encounters an invalid Brainfuck code.
-  enum result_t next(unsigned char *_output, bool *_didOutput);
+  // Returns the result of an execution, which is running, breakpoint, finished, and error.
+  enum result_t next(unsigned char *output, bool *didOutput);
 
-  // Returns the memory. The returned content becomes invalid on reset/next.
-  const std::vector<unsigned char> &getMemory() { return memory; }
+  // Returns the memory and writes its size to `size`.
+  // The returned content becomes invalid on reset() and next().
+  const unsigned char *getMemory(unsigned *size) {
+    *size = memLen;
+    return memory;
+  }
 
-  // Returns the memory pointer.
-  size_t getMemPtr() { return memIndex; }
+  // Returns the value of memory pointer.
+  unsigned getMemPtr() { return memIndex; }
 
-  // Returns the program pointer.
-  size_t getProgPtr() { return progIndex; }
+  // Returns the value of program pointer.
+  unsigned getProgPtr() { return progIndex; }
+
+  // Returns the last error.
+  const wchar_t *getLastError() { return lastError; }
 
  private:
-  // All initializations are in constructor, as old C++ doesn't allow it on a declaration.
-  const wchar_t *program;             // Program
-  const unsigned char *input;         // Input stream
-  std::vector<unsigned char> memory;  // Memory
-  size_t memIndex, progIndex, inIndex, progLen, inLen;
+  wchar_t *program;             // Program
+  unsigned char *input;         // Input stream
+  unsigned char memory[65536];  // Memory
+  unsigned memIndex, progIndex, inIndex, progLen, inLen, memLen;
   bool wrapInt, signedness, debug;
   enum noinput_t noInput;
+  wchar_t lastError[128];
 };
 #endif

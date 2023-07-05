@@ -1,57 +1,64 @@
-#if defined UNDER_CE || (defined _MSC_VER && _MSC_VER < 1800)
-#define PRIu64 "I64u"
-#else
-#define PRIu64 "zu"
-#endif
-
 #include "bf.hpp"
 
-#include <cstring>
-#include <stdexcept>
-#include <vector>
+#include <string.h>
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 
 void Brainfuck::reset() {
+  if (Brainfuck::program) {
+    free(Brainfuck::program);
+    Brainfuck::program = NULL;
+  }
   progIndex = 0;
+  if (Brainfuck::input) {
+    free(Brainfuck::input);
+    Brainfuck::input = NULL;
+  }
   inIndex = 0;
-  memory.clear();
-  memory.push_back(0);
+  memset(memory, 0, sizeof(memory));
   memIndex = 0;
+  memLen = 1;
 }
 
-void Brainfuck::reset(size_t _progLen, const wchar_t *_program, size_t _inLen, const void *_input) {
-  if (_progLen == 0 || !_program) {
-    program = NULL;
-    progLen = 0;
+void Brainfuck::reset(unsigned progLen, wchar_t *program, unsigned inLen, void *input) {
+  if (Brainfuck::program) free(Brainfuck::program);
+  if (progLen == 0 || !program) {
+    Brainfuck::program = NULL;
+    Brainfuck::progLen = 0;
   } else {
-    program = _program;
-    progLen = _progLen;
+    Brainfuck::program = program;
+    Brainfuck::progLen = progLen;
   }
   progIndex = 0;
 
-  if (_inLen == 0 || !_input) {
-    input = NULL;
-    inLen = 0;
+  if (Brainfuck::input) free(Brainfuck::input);
+  if (inLen == 0 || !input) {
+    Brainfuck::input = NULL;
+    Brainfuck::inLen = 0;
   } else {
-    input = (const unsigned char *)_input;
-    inLen = _inLen;
+    Brainfuck::input = (unsigned char *)input;
+    Brainfuck::inLen = inLen;
   }
   inIndex = 0;
 
-  memory.clear();
-  memory.push_back(0);
+  memset(memory, 0, sizeof(memory));
   memIndex = 0;
+  memLen = 1;
 }
 
-void Brainfuck::setBehavior(enum noinput_t _noInput, bool _wrapInt, bool _signedness, bool _debug) {
-  noInput = _noInput;
-  wrapInt = _wrapInt;
-  signedness = _signedness;
-  debug = _debug;
+void Brainfuck::setBehavior(enum noinput_t noInput, bool wrapInt, bool signedness, bool debug) {
+  Brainfuck::noInput = noInput;
+  Brainfuck::wrapInt = wrapInt;
+  Brainfuck::signedness = signedness;
+  Brainfuck::debug = debug;
 }
 
-enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutput) {
+enum Brainfuck::result_t Brainfuck::next(unsigned char *output, bool *didOutput) {
   enum result_t result = RESULT_RUN;
-  *_didOutput = false;
+  *didOutput = false;
 
   if (progIndex >= progLen) {
     return RESULT_FIN;
@@ -59,16 +66,12 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
 
   switch (program[progIndex]) {
     case L'>':
-      if (memIndex != memory.max_size() - 1) {
+      if (memIndex != 65535) {
         ++memIndex;
-        if (memory.size() == memIndex) memory.push_back(0);
+        if (memIndex == memLen) ++memLen;
       } else {
-        char errorMsg[128];
-        sprintf(errorMsg,
-                "%" PRIu64
-                ": Instruction '>' used when the memory pointer is std::vector::max_size.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
+        wsprintfW(lastError, L"%u: Instruction '>' used when the memory pointer is 65535.", progIndex);
+        return RESULT_ERR;
       }
       break;
 
@@ -76,10 +79,8 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
       if (memIndex != 0) {
         --memIndex;
       } else {
-        char errorMsg[128];
-        sprintf(errorMsg, "%" PRIu64 ": Instruction '<' used when the memory pointer is 0.",
-                progIndex);
-        throw std::invalid_argument(errorMsg);
+        wsprintfW(lastError, L"%u: Instruction '<' used when the memory pointer is 0.", progIndex);
+        return RESULT_ERR;
       }
       break;
 
@@ -91,19 +92,15 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
         if (memory[memIndex] != 0x7F) {
           ++memory[memIndex];
         } else {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": Instruction '+' used when the pointed memory is 127.",
-                  progIndex);
-          throw std::invalid_argument(errorMsg);
+          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 127.", progIndex);
+          return RESULT_ERR;
         }
       } else {
         if (memory[memIndex] != 0xFF) {
           ++memory[memIndex];
         } else {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": Instruction '+' used when the pointed memory is 255.",
-                  progIndex);
-          throw std::invalid_argument(errorMsg);
+          wsprintfW(lastError, L"%u: Instruction '+' used when the pointed memory is 255.", progIndex);
+          return RESULT_ERR;
         }
       }
       break;
@@ -116,26 +113,22 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
         if (memory[memIndex] != 0x80) {
           --memory[memIndex];
         } else {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": Instruction '-' used when the pointed memory is -128.",
-                  progIndex);
-          throw std::invalid_argument(errorMsg);
+          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is -128.", progIndex);
+          return RESULT_ERR;
         }
       } else {
         if (memory[memIndex] != 0x00) {
           --memory[memIndex];
         } else {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": Instruction '-' used when the pointed memory is 0.",
-                  progIndex);
-          throw std::invalid_argument(errorMsg);
+          wsprintfW(lastError, L"%u: Instruction '-' used when the pointed memory is 0.", progIndex);
+          return RESULT_ERR;
         }
       }
       break;
 
     case L'.':
-      *_output = memory[memIndex];
-      *_didOutput = true;
+      *output = memory[memIndex];
+      *didOutput = true;
       break;
 
     case L',':
@@ -145,10 +138,8 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
         } else if (noInput == NOINPUT_FF) {
           memory[memIndex] = 255;
         } else {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": Instruction ',' used when the input stream is empty.",
-                  progIndex);
-          throw std::invalid_argument(errorMsg);
+          wsprintfW(lastError, L"%u: Instruction ',' used when the input stream is empty.", progIndex);
+          return RESULT_ERR;
         }
       } else {
         memory[memIndex] = input[inIndex];
@@ -158,46 +149,53 @@ enum Brainfuck::result_t Brainfuck::next(unsigned char *_output, bool *_didOutpu
 
     case L'[':
       if (memory[memIndex] == 0) {
-        size_t bracketIndex = progIndex++, ketCnt = 0;
-        while (progIndex < progLen) {
-          if (program[progIndex] == L']') {
+        if (progIndex == progLen - 1) {
+          wsprintfW(lastError, L"%u: No matching closing bracket.", progIndex);
+          return RESULT_ERR;
+        }
+        unsigned nextIndex = progIndex + 1, ketCnt = 0;
+        while (true) {
+          if (program[nextIndex] == L']') {
             if (ketCnt == 0) {
               break;  // match
             } else {
               --ketCnt;  // recursive bracket
             }
           }
-          if (program[progIndex] == L'[') ketCnt++;
-          ++progIndex;
+          if (program[nextIndex] == L'[') ketCnt++;
+          if (nextIndex == progLen - 1) {
+            wsprintfW(lastError, L"%u: No matching closing bracket.", progIndex);
+            return RESULT_ERR;
+          }
+          ++nextIndex;
         }
-        if (progIndex >= progLen) {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": No matching closing bracket.", bracketIndex);
-          throw std::invalid_argument(errorMsg);
-        }
+        progIndex = nextIndex;
       }
       break;
 
     case L']':
       if (memory[memIndex] != 0) {
-        size_t bracketIndex = progIndex--, braCnt = 0;
+        if (progIndex == 0) {
+          wsprintfW(lastError, L"%u: No matching opening bracket.", progIndex);
+          return RESULT_ERR;
+        }
+        unsigned nextIndex = progIndex - 1, braCnt = 0;
         while (true) {
-          if (program[progIndex] == L'[') {
+          if (program[nextIndex] == L'[') {
             if (braCnt == 0) {
               break;  // match
             } else {
               --braCnt;  // recursive bracket
             }
           }
-          if (program[progIndex] == L']') braCnt++;
-          if (progIndex == 0) break;
-          --progIndex;
+          if (program[nextIndex] == L']') braCnt++;
+          if (nextIndex == 0) {
+            wsprintfW(lastError, L"%lu: No matching opening bracket.", (unsigned long)progIndex);
+            return RESULT_ERR;
+          }
+          --nextIndex;
         }
-        if (progIndex <= 0 && (program[progIndex] != L'[' || braCnt != 0)) {
-          char errorMsg[128];
-          sprintf(errorMsg, "%" PRIu64 ": No matching opening bracket.", bracketIndex);
-          throw std::invalid_argument(errorMsg);
-        }
+        progIndex = nextIndex;
       }
       break;
 

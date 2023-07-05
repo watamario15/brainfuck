@@ -6,7 +6,7 @@ rem You can remove this line if you add required CeGCC paths to your system.
 set PATH=C:\cegcc\main\bin;C:\cegcc\main\libexec\gcc\arm-mingw32ce\9.3.0;C:\cegcc\cygwin
 
 echo "*** Compiling C++ sources..."
-g++ -Wall -Wextra -O3 -std=c++17 -c *.cpp
+g++ -Wall -Wextra -O3 -std=c++98 -c *.cpp
 
 echo "*** Compiling res.rc..."
 windres resource.rc resource.o

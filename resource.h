@@ -3,14 +3,14 @@
 
 #define APP_NAME L"Brain fuck"
 #define APP_DESCRIPTION L"Brainfuck interpreter for SHARP Brain."
-#define APP_COPYRIGHT L"(C) 2022 watamario15 (https://github.com/watamario15)"
+#define APP_COPYRIGHT L"(C) 2022-2023 watamario15 (https://github.com/watamario15)"
 #define APP_VERSION L"1.0"
 
 #define VER_STR_COMPANYNAME "watamario15"
 #define VER_STR_DESCRIPTION "Brainfuck interpreter for SHARP Brain."
 #define VER_STR_FILEVERSION 1, 0, 0, 0
 #define VER_STR_APPNAME "Brain fuck"
-#define VER_STR_COPYRIGHT "(C) 2022 watamario15 (https://github.com/watamario15)"
+#define VER_STR_COPYRIGHT "(C) 2022-2023 watamario15 (https://github.com/watamario15)"
 #define VER_STR_ORIGINALFILENAME "Brainfuck.exe"
 #define VER_STR_VERSION "1.0"
 
@@ -29,16 +29,16 @@
 #define IDM_FILE_SAVE_AS 130
 #define IDM_FILE_EXIT 140
 #define IDM_EDIT_UNDO 200
-#define IDM_EDIT_CUT 210
-#define IDM_EDIT_COPY 220
-#define IDM_EDIT_PASTE 230
-#define IDM_EDIT_SELALL 240
+#define IDM_EDIT_REDO 210
+#define IDM_EDIT_CUT 220
+#define IDM_EDIT_COPY 230
+#define IDM_EDIT_PASTE 240
+#define IDM_EDIT_SELALL 250
 #define IDM_BF_MEMTYPE_SIGNED 300
 #define IDM_BF_MEMTYPE_UNSIGNED 301
-#define IDM_BF_OUTPUT_ASCII 310
-#define IDM_BF_OUTPUT_UTF8 311
-#define IDM_BF_OUTPUT_SJIS 312
-#define IDM_BF_OUTPUT_HEX 313
+#define IDM_BF_OUTPUT_UTF8 310
+#define IDM_BF_OUTPUT_SJIS 311
+#define IDM_BF_OUTPUT_HEX 312
 #define IDM_BF_INPUT_UTF8 320
 #define IDM_BF_INPUT_SJIS 321
 #define IDM_BF_INPUT_HEX 322
@@ -57,8 +57,9 @@
 #define IDM_OPT_HLTPROG 430
 #define IDM_OPT_HLTMEM 440
 #define IDM_OPT_DARK 450
-#define IDM_OPT_FONT 460
-#define IDM_OPT_WORDWRAP 470
+#define IDM_OPT_LAYOUT 460
+#define IDM_OPT_FONT 470
+#define IDM_OPT_WORDWRAP 480
 #define IDM_ABOUT 500
 
 #endif

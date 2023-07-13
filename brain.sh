@@ -8,6 +8,6 @@ echo "*** Compiling res.rc..."
 arm-mingw32ce-windres resource.rc resource.o
 
 echo "*** Linking..."
-arm-mingw32ce-g++ ./*.o -static -s -lcommctrl -lcommdlg -lmmtimer -o AppMain_.exe
+arm-mingw32ce-g++ ./*.o -static -s -lcommctrl -lcommdlg -lmmtimer -o brainfuck-wce-armv5tej.exe
 
 echo "OK"

@@ -12,6 +12,6 @@ echo "*** Compiling res.rc..."
 windres resource.rc resource.o
 
 echo "*** Linking..."
-g++ *.o -static -s -lcommctrl -lcommdlg -lmmtimer -o AppMain_.exe
+g++ *.o -static -s -lcommctrl -lcommdlg -lmmtimer -o brainfuck-wce-armv5tej.exe
 
 echo "OK"

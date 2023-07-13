@@ -21,8 +21,7 @@ bool bfInit() {
   if (wcInput) {
     GetWindowTextW(global::hInput, wcInput, inputSize);
   } else {
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return false;
   }
 
@@ -34,8 +33,7 @@ bool bfInit() {
     inLen = WideCharToMultiByte(codePage, 0, wcInput, -1, NULL, 0, NULL, NULL);
     input = (unsigned char *)malloc(inLen);
     if (!input) {
-      util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                       MB_ICONWARNING);
+      util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
       free(wcInput);
       return false;
     }
@@ -56,8 +54,7 @@ bool bfInit() {
   if (wcEditor) {
     GetWindowTextW(global::hEditor, wcEditor, editorSize);
   } else {
-    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error",
-                     MB_ICONWARNING);
+    util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     free(input);
     return false;
   }
@@ -124,9 +121,8 @@ tret_t WINAPI threadRunner(void *lpParameter) {
                              TIME_PERIODIC | TIME_CALLBACK_EVENT_SET);
     }
     if (!timerID) {
-      util::messageBox(global::hWnd, global::hInst,
-                       L"This speed is not supported on your device. Try slowing down.", L"Error",
-                       MB_ICONERROR);
+      util::messageBox(global::hWnd, global::hInst, L"This speed is not supported on your device. Try slowing down.",
+                       L"Error", MB_ICONERROR);
       ui::setState(global::STATE_INIT);
       PostMessageW(global::hWnd, WM_APP_THREADEND, 0, 0);
       return 1;
@@ -155,12 +151,10 @@ tret_t WINAPI threadRunner(void *lpParameter) {
   if (ctrlThread == CTRLTHREAD_END) {
     ui::setState(global::STATE_INIT);
   } else {  // Paused, finished, error, or breakpoint
-    ui::setState(result == Brainfuck::RESULT_RUN || result == Brainfuck::RESULT_BREAK
-                     ? global::STATE_PAUSE
-                     : global::STATE_FINISH);
+    ui::setState(result == Brainfuck::RESULT_RUN || result == Brainfuck::RESULT_BREAK ? global::STATE_PAUSE
+                                                                                      : global::STATE_FINISH);
     if (result == Brainfuck::RESULT_ERR) {
-      util::messageBox(global::hWnd, global::hInst, bf.getLastError(), L"Brainfuck Error",
-                       MB_ICONWARNING);
+      util::messageBox(global::hWnd, global::hInst, bf.getLastError(), L"Brainfuck Error", MB_ICONWARNING);
     }
     unsigned size;
     const unsigned char *memory = bf.getMemory(&size);

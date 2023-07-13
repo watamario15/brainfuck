@@ -1,18 +1,18 @@
-#ifndef DEF_H_
-#define DEF_H_
+#ifndef RESOURCE_H_
+#define RESOURCE_H_
 
-#define APP_NAME L"Brain fuck"
-#define APP_DESCRIPTION L"Brainfuck interpreter for SHARP Brain."
+#define APP_NAME L"Brainfuck for SHARP Brain"
+#define APP_DESCRIPTION L"Brainfuck interpreter and debugger for SHARP Brain."
 #define APP_COPYRIGHT L"(C) 2022-2023 watamario15 (https://github.com/watamario15)"
-#define APP_VERSION L"1.0"
+#define APP_VERSION L"1.0 RC3"
 
 #define VER_STR_COMPANYNAME "watamario15"
-#define VER_STR_DESCRIPTION "Brainfuck interpreter for SHARP Brain."
-#define VER_STR_FILEVERSION 1, 0, 0, 0
-#define VER_STR_APPNAME "Brain fuck"
+#define VER_STR_DESCRIPTION "Brainfuck interpreter and debugger for SHARP Brain."
+#define VER_STR_FILEVERSION 0, 0, 0, 3
+#define VER_STR_APPNAME "Brainfuck for SHARP Brain"
 #define VER_STR_COPYRIGHT "(C) 2022-2023 watamario15 (https://github.com/watamario15)"
-#define VER_STR_ORIGINALFILENAME "Brainfuck.exe"
-#define VER_STR_VERSION "1.0"
+#define VER_STR_ORIGINALFILENAME "brainfuck-<platform>-<architecture>.exe"
+#define VER_STR_VERSION "1.0 RC3"
 
 #define IDC_EDITOR 0
 #define IDC_INPUT 1

@@ -12,6 +12,6 @@ echo "*** Compiling res.rc..."
 windres resource.rc resource.o
 
 echo "*** Linking..."
-g++ *.o -static -s -lcomctl32 -lwinmm -mwindows -municode -o Brainfuck.exe
+g++ *.o -static -s -lcomctl32 -lwinmm -mwindows -municode -o brainfuck-win.exe
 
 echo "OK"

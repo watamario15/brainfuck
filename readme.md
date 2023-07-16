@@ -54,7 +54,7 @@ Might also work on older OSes than these, but listed are the ones I'm confident 
 
 Download appropriate one from **[Releases](https://github.com/watamario15/brainfuck-sharp-brain/releases)** and run it on your device. No installation needed. For SHARP Brain, use an **Armv4i** version and follow the usual procedure, which is explained [here (Japanese)](https://brain.fandom.com/ja/wiki/%E3%82%A2%E3%83%97%E3%83%AA%E3%81%AE%E8%B5%B7%E5%8B%95%E6%96%B9%E6%B3%95) and [here (English)](https://www.hpcfactor.com/reviews/editorial/ceopener-sharp-brain/).
 
-You can also remove this app by just deleting it. It doesn't save anything to outside.
+You can also remove this app by just deleting it. It doesn't save anything outside.
 
 ## How To Build
 
@@ -64,7 +64,7 @@ You can build this app in various ways.
 
 - `win.sh`: Builds binaries using [MinGW_w64](https://www.mingw-w64.org/). Requires MinGW_w64 to be accessible from PATH.
   - Requires POSIX compliant environment.
-- `win.bat`: Batchfile version of `win.sh`. Use this for Windows build of MinGW_w64.
+  - Use `win.bat` for Windows build of MinGW_w64.
 - `vs2022proj-pc/`: [Visual Studio 2022](https://visualstudio.microsoft.com/vs/) (not VSCode) solution and project. The free Community edition is enough. Just open the `.sln` file and build, with the C++ Desktop Development installed.
   - Requires Windows machine.
 
@@ -74,8 +74,30 @@ You probably want to read either [here (Japanese)](https://brain.fandom.com/ja/w
 
 - `brain.sh`: Builds binaries using [CeGCC](https://max.kellermann.name/projects/cegcc/). Requires CeGCC to be accessible from PATH.
   - Requires POSIX compliant environment.
-- `brain.bat`: Batchfile version of `brain.sh`. Use this for Windows build of CeGCC.
-- `evc4proj/`: eMbedded Visual C++ 4.0 project. Just open the `.vcw` file and build.
+  - Use `brain.bat` for Windows build of CeGCC.
+- `evc4proj/`: eMbedded Visual C++ 4.0 project. Just open the `.vcw` file and build, with a SDK installed.
   - Requires Windows machine.
+  - I use the Standard SDK for Windows CE 4.0.
 - `vs2005proj/` and `vs2008proj/`: Visual Studio 2005 and 2008 solution and project. Just open the `.sln` file and build, with the Smart Device Programmability installed.
   - Requires Windows machine.
+
+### Source Hierarchy
+```
+├ main.cpp / main.hpp : Entry point and global definitions
+│  ├ msg.cpp / msg.hpp : Message handlers
+│  ├ runner.cpp / runner.hpp : Brainfuck execution managers
+│  ├ ui.cpp / ui.hpp : UI functions
+│  └ wproc.cpp / wproc.hpp : Window procedures
+│
+├ bf.cpp / bf.hpp : Brainfuck interpreter
+│
+├ history.cpp / history.hpp : Undo/redo manager
+│
+├ tokenizer.cpp / tokenizer.hpp : UTF-8/Shift_JIS tokenizers
+│
+├ util.cpp / util.hpp : Utility functions
+│
+└ resource.rc / resource.h : Resource
+    ├ app.ico : Application icon
+    └ app.manifest : Application manifest
+```

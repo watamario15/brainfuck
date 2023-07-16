@@ -48,18 +48,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t *lpCmd
 
   global::hInst = hInstance;
 
-  // Replaces slashes with backslashes.
-  for (i = 0; lpCmdLine[i]; ++i) {
+  while (*lpCmdLine == L' ') ++lpCmdLine;
+  bool isQuoted = false;
+  if (*lpCmdLine == L'"') {
+    isQuoted = true;
+    ++lpCmdLine;
+  }
+  for (i = 0; lpCmdLine[i]; ++i) {  // Replaces slashes with backslashes, and removes a closing quote.
+    if (lpCmdLine[i] == L'"' || (lpCmdLine[i] == L' ' && !isQuoted)) {
+      lpCmdLine[i] = L'\0';
+      break;
+    }
     if (lpCmdLine[i] == L'/') lpCmdLine[i] = L'\\';
   }
-
-  // Removes quotes if exist (uses the `i` obtained from the last operation).
-  if (lpCmdLine[0] == L'"') {
-    lpCmdLine[i - 1] = L'\0';
-    global::cmdLine = lpCmdLine + 1;
-  } else {
-    global::cmdLine = lpCmdLine;
-  }
+  for (--i; i >= 0 && lpCmdLine[i] == ' '; --i) lpCmdLine[i] = L'\0';  // Removes trailing spaces.
+  global::cmdLine = lpCmdLine;
 
   WNDCLASSW wcl;
   memset(&wcl, 0, sizeof(WNDCLASSW));

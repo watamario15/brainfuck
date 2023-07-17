@@ -29,6 +29,8 @@ Default options are shown in **bold** typeface.
   - Your program doesn't work as expected? It's tough to see how the program runs? This interpreter shows **the next instruction to execute and memory internals**. Also, it can highlight **where the memory pointer is**. You can also do a **step execution** or enable **breakpoint instruction (`@`)** to further inspect what's going on.
 - **Speed Adjustment**
   - You can select either **100 ms, 10 ms, 1 ms, or fastest** speed to run a program. You can also disable the Real Time Debugging to further speedup the execution.
+- **Screen Keyboard**
+  - Your device doesn't have a good keyboard for Brainfuck programming? This interpreter offers you **buttons to type Brainfuck instructions with no hassle.**
 - **Light/Dark Theme**
   - Tired to code in a bright screen? The dark theme isn't for you? This interpreter supports **both the light and dark themes**.
 - **Per Monitor High DPI Aware V2**
@@ -45,16 +47,30 @@ Default options are shown in **bold** typeface.
 
 - **Windows XP or later**
   - Tested on Windows XP and 11.
-- **Windows CE 4.0 or later**
+  - Might also work on older OSes like Windows 2000.
+- **Windows CE .NET 4.0 or later**
   - Tested on SHARP Brain PW-SH1, which is Windows Embedded CE 6.0 (Armv5TEJ).
-
-Might also work on older OSes than these, but listed are the ones I'm confident in some degree.
+- **[Wine](https://www.winehq.org/)**
+  - Tested the AMD64 version on Wine 7 and 8 on M2 MacBook Air (Rosetta 2).
+  - I'm not aware of the exact version required, but newer is better.
 
 ## How To Use
 
-Download appropriate one from **[Releases](https://github.com/watamario15/brainfuck-sharp-brain/releases)** and run it on your device. No installation needed. For SHARP Brain, use an **Armv4i** version and follow the usual procedure, which is explained [here (Japanese)](https://brain.fandom.com/ja/wiki/%E3%82%A2%E3%83%97%E3%83%AA%E3%81%AE%E8%B5%B7%E5%8B%95%E6%96%B9%E6%B3%95) and [here (English)](https://www.hpcfactor.com/reviews/editorial/ceopener-sharp-brain/).
+Download appropriate one from **[Releases](https://github.com/watamario15/brainfuck-sharp-brain/releases)** and run it on your device. No installation needed. **For SHARP Brain, use an Armv4I version and follow the usual procedure, which is explained [here (Japanese)](https://brain.fandom.com/ja/wiki/%E3%82%A2%E3%83%97%E3%83%AA%E3%81%AE%E8%B5%B7%E5%8B%95%E6%96%B9%E6%B3%95) and [here (English)](https://www.hpcfactor.com/reviews/editorial/ceopener-sharp-brain/).**
 
 You can also remove this app by just deleting it. It doesn't save anything outside.
+
+![](desc.png)
+
+**You write a program on the program editor, fill the input area if necesary, and press "Run" or "Next" to execute your program.** You can also use buttons to type Brainfuck instructions in. **To edit the program or input after starting an execution, press "End" to end the execution first.** Note that black (dark theme)/glayed (light theme) areas are locked and not editable, and gray (dark theme)/white (light theme) areas are editable.
+
+You can tune the behavior and reach more features from the menu bar. They represents
+
+- **File**: File features. New file, open file, save file...
+- **Edit**: Editing features. Undo, redo, copy, paste, ...
+- **Brainfuck**: Brainfuck language customization. Refer to the "Spec" section.
+- **Options**: Customizations and features. Speed, memory view address, real time debugging, highlight next instruction and memory pointer, dark/light switch, layout, font, and wordwrap.
+- **About**: About this program.
 
 ## How To Build
 
@@ -82,22 +98,23 @@ You probably want to read either [here (Japanese)](https://brain.fandom.com/ja/w
   - Requires Windows machine.
 
 ### Source Hierarchy
+
 ```
-├ main.cpp / main.hpp : Entry point and global definitions
-│  ├ msg.cpp / msg.hpp : Message handlers
-│  ├ runner.cpp / runner.hpp : Brainfuck execution managers
-│  ├ ui.cpp / ui.hpp : UI functions
-│  └ wproc.cpp / wproc.hpp : Window procedures
+├─ main.cpp / main.hpp : Entry point and global definitions
+│  ├─ msg.cpp / msg.hpp : Message handlers
+│  ├─ runner.cpp / runner.hpp : Brainfuck execution managers
+│  ├─ ui.cpp / ui.hpp : UI functions
+│  └─ wproc.cpp / wproc.hpp : Window procedures
 │
-├ bf.cpp / bf.hpp : Brainfuck interpreter
+├─ bf.cpp / bf.hpp : Brainfuck interpreter
 │
-├ history.cpp / history.hpp : Undo/redo manager
+├─ history.cpp / history.hpp : Undo/redo manager
 │
-├ tokenizer.cpp / tokenizer.hpp : UTF-8/Shift_JIS tokenizers
+├─ tokenizer.cpp / tokenizer.hpp : UTF-8/Shift_JIS tokenizers
 │
-├ util.cpp / util.hpp : Utility functions
+├─ util.cpp / util.hpp : Utility functions
 │
-└ resource.rc / resource.h : Resource
-    ├ app.ico : Application icon
-    └ app.manifest : Application manifest
+└─ resource.rc / resource.h : Resource
+    ├─ app.ico : Application icon
+    └─ app.manifest : Application manifest
 ```

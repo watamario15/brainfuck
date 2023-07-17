@@ -11,7 +11,8 @@ const wchar_t *UTF8Tokenizer::flush() {
   if (index == 0) return NULL;
 
   memset(result, 0, sizeof(result));
-  for (int i = 0; i < index; ++i) result[i] = L'?';
+  int i = 0;
+  for (; i < index; ++i) result[i] = L'?';
   state = index = 0;
   return result;
 }
@@ -36,7 +37,8 @@ const wchar_t *UTF8Tokenizer::add(unsigned char chr) {
 
     token[0] = chr;
     char tmp = chr << 2;
-    for (int i = 1; true; ++i) {
+    int i = 1;
+    for (; true; ++i) {
       if (!(tmp & 0x80)) {
         state = i;
         break;
@@ -52,7 +54,8 @@ const wchar_t *UTF8Tokenizer::add(unsigned char chr) {
     // Got a first byte, which is unexpected here.
     if ((chr & 0xC0) != 0x80) {
       memset(result, 0, sizeof(result));
-      for (int i = 0; i < index; ++i) result[i] = L'?';
+      int i = 0;
+      for (; i < index; ++i) result[i] = L'?';
       state = index = 0;
       return result;
     }

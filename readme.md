@@ -45,11 +45,11 @@ Default options are shown in **bold** typeface.
 
 ## System Requirements
 
-- **Windows XP or later**
-  - Tested on Windows XP and 11.
-  - Might also work on older OSes like Windows 2000.
+- **Windows 2000 or later**
+  - Tested on Windows 2000 SP4, XP SP3, and 11.
+  - Might also work on older OS versions, but who knows.
 - **Windows CE .NET 4.0 or later**
-  - Tested on SHARP Brain PW-SH1, which is Windows Embedded CE 6.0 (Armv5TEJ).
+  - Tested on [SHARP Brain PW-SH1](https://jp.sharp/support/dictionary/product/pw-sh1.html) (CE 6.0 with Armv5TEJ CPU), [MobilePro 900](https://www.hpcfactor.com/hardware/devices/134/NEC/MobilePro_900) (CE 4.2 with Armv5TE CPU), and [HP t5540](https://www.hpcfactor.com/hardware/devices/254/Hewlett_Packard/t5540) (CE 6.0 R3 with x86 CPU).
 - **[Wine](https://www.winehq.org/)**
   - Tested the AMD64 version on Wine 7 and 8 on M2 MacBook Air (Rosetta 2).
   - I'm not aware of the exact version required, but newer is better.

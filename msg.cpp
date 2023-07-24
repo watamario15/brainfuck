@@ -291,7 +291,7 @@ void onCommand(HWND hWnd, int id, HWND hWndCtl, UINT codeNotify) {
   }
 }
 
-BOOL onCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct) {
+BOOL onCreate(HWND hWnd, CREATESTRUCTW *lpCreateStruct) {
   UNREFERENCED_PARAMETER(lpCreateStruct);
 
   size_t i;
@@ -378,8 +378,7 @@ BOOL onCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct) {
   global::sysDPI = GetDeviceCaps(hDC, LOGPIXELSX);
   ReleaseDC(hWnd, hDC);
 
-  // Tries to load the GetDpiForMonitor API. Use of the full path improves security. We avoid a direct call to keep this
-  // program compatible with Windows 7 and earlier.
+  // Tries to load Monitor APIs avoiding a direct call to make this app runnable on old devices.
   //
   // Microsoft recommends the use of GetDpiForWindow API instead of this API according to their documentation. However,
   // it requires Windows 10 1607 or later, which makes this compatibility keeping code more complicated, and
@@ -389,19 +388,22 @@ BOOL onCreate(HWND hWnd, LPCREATESTRUCT lpCreateStruct) {
   // References:
   // https://learn.microsoft.com/en-us/windows/win32/api/shellscalingapi/nf-shellscalingapi-getdpiformonitor
   // https://mariusbancila.ro/blog/2021/05/19/how-to-build-high-dpi-aware-native-desktop-applications/
+  HMODULE shcore = LoadLibraryW(L"Shcore.dll"), user32 = LoadLibraryW(L"User32.dll");
   GetDpiForMonitor_t getDpiForMonitor = NULL;
-  HMODULE dll = LoadLibraryW(L"C:\\Windows\\System32\\Shcore.dll");
-  if (dll) getDpiForMonitor = (GetDpiForMonitor_t)(void *)GetProcAddress(dll, "GetDpiForMonitor");
+  if (shcore) getDpiForMonitor = (GetDpiForMonitor_t)(void *)GetProcAddress(shcore, "GetDpiForMonitor");
+  MonitorFromWindow_t monitorFromWindow = NULL;
+  if (user32) monitorFromWindow = (MonitorFromWindow_t)(void *)GetProcAddress(user32, "MonitorFromWindow");
 
-  // Tests whether it successfully got the GetDpiForMonitor API.
-  if (getDpiForMonitor) {  // It got (the system is presumably Windows 8.1 or later).
+  // Tests whether it successfully got the APIs.
+  if (getDpiForMonitor && monitorFromWindow) {  // It got (the system is presumably Windows 8.1 or later).
     unsigned tmpX, tmpY;
-    getDpiForMonitor(MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &tmpX, &tmpY);
+    getDpiForMonitor(monitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST), MDT_EFFECTIVE_DPI, &tmpX, &tmpY);
     dpi = tmpX;
   } else {  // It failed (the system is presumably older than Windows 8.1).
     dpi = global::sysDPI;
   }
-  if (dll) FreeLibrary(dll);
+  if (shcore) FreeLibrary(shcore);
+  if (user32) FreeLibrary(user32);
 
   // Adjusts the window size according to the DPI value.
   SetWindowPos(hWnd, NULL, 0, 0, adjust(480), adjust(320), SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOMOVE);
@@ -466,6 +468,7 @@ void onInitMenuPopup(HWND hWnd, HMENU hMenu, UINT item, BOOL fSystemMenu) {
     ui::enableMenus(IDM_EDIT_REDO, global::hFocused == global::hEditor  ? global::history.canRedo()
                                    : global::hFocused == global::hInput ? global::inputHistory.canRedo()
                                                                         : false);
+    ui::enableMenus(IDM_EDIT_PASTE, IsClipboardFormatAvailable(CF_UNICODETEXT) != 0);
     ui::enableMenus(IDM_BF_MEMTYPE_UNSIGNED, true);
     ui::enableMenus(IDM_BF_OUTPUT_HEX, true);
     ui::enableMenus(IDM_BF_INPUT_HEX, true);
@@ -482,6 +485,7 @@ void onInitMenuPopup(HWND hWnd, HMENU hMenu, UINT item, BOOL fSystemMenu) {
     ui::enableMenus(IDM_FILE_OPEN, false);
     ui::enableMenus(IDM_EDIT_UNDO, false);
     ui::enableMenus(IDM_EDIT_REDO, false);
+    ui::enableMenus(IDM_EDIT_PASTE, false);
     ui::enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
     ui::enableMenus(IDM_BF_OUTPUT_HEX, false);
     ui::enableMenus(IDM_BF_INPUT_HEX, false);
@@ -498,6 +502,7 @@ void onInitMenuPopup(HWND hWnd, HMENU hMenu, UINT item, BOOL fSystemMenu) {
     ui::enableMenus(IDM_FILE_OPEN, false);
     ui::enableMenus(IDM_EDIT_UNDO, false);
     ui::enableMenus(IDM_EDIT_REDO, false);
+    ui::enableMenus(IDM_EDIT_PASTE, false);
     ui::enableMenus(IDM_BF_MEMTYPE_UNSIGNED, false);
     ui::enableMenus(IDM_BF_OUTPUT_HEX, false);
     ui::enableMenus(IDM_BF_INPUT_HEX, false);
@@ -605,7 +610,7 @@ void onDropFiles(HWND hWnd, HDROP hDrop) {
   ui::openFile(false, wcFileName);
 }
 
-void onGetMinMaxInfo(HWND hWnd, LPMINMAXINFO lpMinMaxInfo) {
+void onGetMinMaxInfo(HWND hWnd, MINMAXINFO *lpMinMaxInfo) {
   UNREFERENCED_PARAMETER(hWnd);
 
   lpMinMaxInfo->ptMinTrackSize.x = adjust(480);

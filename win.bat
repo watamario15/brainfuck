@@ -8,7 +8,7 @@ set PATH=C:\MinGW\bin
 echo "*** Compiling C++ sources..."
 g++ -Wall -Wextra -O3 -std=c++98 -c *.cpp
 
-echo "*** Compiling res.rc..."
+echo "*** Compiling resource.rc..."
 windres resource.rc resource.o
 
 echo "*** Linking..."

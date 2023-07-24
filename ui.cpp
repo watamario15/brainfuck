@@ -299,7 +299,7 @@ void openFile(bool newFile, const wchar_t *fileName) {
     return;
   }
 
-  char *fileBuf = (char *)malloc(sizeof(char) * fileSize);
+  char *fileBuf = (char *)malloc(sizeof(char) * fileSize + 1);
   if (!fileBuf) {
     util::messageBox(global::hWnd, global::hInst, L"Memory allocation failed.", L"Internal Error", MB_ICONWARNING);
     return;

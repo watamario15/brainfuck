@@ -1,17 +1,18 @@
 @echo off
 chcp 65001 >nul 2>&1
 
-rem !!! Modify this path to fit to your environment !!!
-rem You can remove this line if you add required CeGCC paths to your system.
-set PATH=C:\cegcc\main\bin;C:\cegcc\main\libexec\gcc\arm-mingw32ce\9.3.0;C:\cegcc\cygwin
+if not defined PREFIX set "PREFIX=arm-mingw32ce-"
 
-echo "*** Compiling C++ sources..."
-arm-mingw32ce-g++ -Wall -Wextra -O3 -std=c++98 -march=armv5tej -mcpu=arm926ej-s -c *.cpp
+echo *** [ARMv5TEJ] Compiling C++ sources...
+"%PREFIX%g++" -Wall -Wextra -O3 -march=armv5tej -mcpu=arm926ej-s -c *.cpp
+echo *** [ARMv5TEJ] Compiling resource.rc...
+"%PREFIX%windres" -c 65001 resource.rc resource.o
+echo *** [ARMv5TEJ] Linking...
+"%PREFIX%g++" *.o -static -s -lcommctrl -lcommdlg -lmmtimer -o brainfuck-wce-armv5tej.exe
 
-echo "*** Compiling res.rc..."
-arm-mingw32ce-windres resource.rc resource.o
-
-echo "*** Linking..."
-arm-mingw32ce-g++ *.o -static -s -lcommctrl -lcommdlg -lmmtimer -o brainfuck-wce-armv5tej.exe
-
-echo "OK"
+echo *** [ARMv5TE] Compiling C++ sources...
+"%PREFIX%g++" -Wall -Wextra -O3 -march=armv5te -c *.cpp
+echo *** [ARMv5TE] Compiling resource.rc...
+"%PREFIX%windres" -c 65001 resource.rc resource.o
+echo *** [ARMv5TE] Linking...
+"%PREFIX%g++" *.o -static -s -lcommctrl -lcommdlg -lmmtimer -o brainfuck-wce-armv5te.exe

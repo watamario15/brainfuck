@@ -38,7 +38,7 @@ Default options are shown in **bold** typeface.
 - **Switch Layout**
   - Your device is wide? Or rather portrait? This interpreter offers you **two layouts** to support both screens.
 - **Lightweight and Runs on Old Devices**
-  - For Windows CE, it's only **about 50 KB** and requires only **about 1 MB of RAM**. The Windows PC version is also tiny and runs perfectly even on **Windows XP**.
+  - For Windows CE, it's only **about 50 KB** and requires only **about 1 MB of RAM**. The Windows PC version is also tiny and runs perfectly even on **Windows 2000**.
 - **Targets Broad CPU Architectures**
   - For Windows CE, you can get **Arm, MIPS, SH3, SH4, and x86** versions including variations. Even for Windows PC, you can get **ARM32, ARM64, x86, and AMD64** versions.
 - ...and more!

@@ -9,7 +9,7 @@
 #endif
 
 // Microsoft provided min/max macros conflict with C++ STL and even some Windows SDKs lack them.
-// So we disable them here and redefine ourself.
+// So we disable them here and redefine ourselves.
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -71,8 +71,14 @@ typedef enum MONITOR_DPI_TYPE {
 } MONITOR_DPI_TYPE;
 
 // The function pointer type for GetDpiForMonitor API.
-typedef HRESULT(CALLBACK *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, unsigned *dpiX,
-                                              unsigned *dpiY);
+typedef HRESULT(WINAPI *GetDpiForMonitor_t)(HMONITOR hmonitor, MONITOR_DPI_TYPE dpiType, unsigned *dpiX,
+                                            unsigned *dpiY);
+
+// The function pointer type for MonitorFromWindow API.
+typedef HMONITOR(WINAPI *MonitorFromWindow_t)(HWND hwnd, DWORD dwFlags);
+
+// The function ponter type for SetDllDirectoryW API.
+typedef BOOL(WINAPI *SetDllDirectoryW_t)(const wchar_t *lpPathName);
 #endif
 
 // Making SetWindowLongW and GetWindowLongW compatible for both 32-bit and 64-bit system.

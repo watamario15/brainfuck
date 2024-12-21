@@ -46,6 +46,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t *lpCmd
   int i;
   UNREFERENCED_PARAMETER(hPrevInstance);
 
+  SetDllDirectoryW(L"");  // DLL hijacking prevention.
   global::hInst = hInstance;
 
   while (*lpCmdLine == L' ') ++lpCmdLine;

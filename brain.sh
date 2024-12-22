@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e
+#!/bin/sh
+set -eu
 
 echo "*** Compiling C++ sources..."
 arm-mingw32ce-g++ -Wall -Wextra -O3 -std=c++98 -march=armv5tej -mcpu=arm926ej-s -c ./*.cpp

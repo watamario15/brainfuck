@@ -8,9 +8,9 @@ int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t 
 }
 #else
 // The function pointer type for TaskDialog API.
-typedef HRESULT(__stdcall *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance, const wchar_t *pszWindowTitle,
-                                         const wchar_t *pszMainInstruction, const wchar_t *pszContent,
-                                         int dwCommonButtons, const wchar_t *pszIcon, int *pnButton);
+typedef HRESULT(WINAPI *TaskDialog_t)(HWND hwndOwner, HINSTANCE hInstance, const wchar_t *pszWindowTitle,
+                                      const wchar_t *pszMainInstruction, const wchar_t *pszContent, int dwCommonButtons,
+                                      const wchar_t *pszIcon, int *pnButton);
 
 int messageBox(HWND hWnd, HINSTANCE hInst, const wchar_t *lpText, const wchar_t *lpCaption, unsigned uType) {
   // Tests whether uType uses some features that TaskDialog doesn't support.

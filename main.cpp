@@ -45,8 +45,6 @@ int sysDPI = 96;  // The value of system DPI.
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t *lpCmdLine, int nShowCmd) {
   int i;
   UNREFERENCED_PARAMETER(hPrevInstance);
-
-  SetDllDirectoryW(L"");  // DLL hijacking prevention.
   global::hInst = hInstance;
 
   while (*lpCmdLine == L' ') ++lpCmdLine;
@@ -64,6 +62,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, wchar_t *lpCmd
   }
   for (--i; i >= 0 && lpCmdLine[i] == ' '; --i) lpCmdLine[i] = L'\0';  // Removes trailing spaces.
   global::cmdLine = lpCmdLine;
+
+#ifndef UNDER_CE
+  HMODULE kernel32 = LoadLibraryW(L"Kernel32.dll");
+  if (kernel32) {
+    SetDllDirectoryW_t setDllDirectoryW = (SetDllDirectoryW_t)(void *)GetProcAddress(kernel32, "SetDllDirectoryW");
+    if (setDllDirectoryW) setDllDirectoryW(L"");  // DLL hijacking prevention.
+    FreeLibrary(kernel32);
+  }
+#endif
 
   WNDCLASSW wcl;
   memset(&wcl, 0, sizeof(WNDCLASSW));

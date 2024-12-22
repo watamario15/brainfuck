@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e
+#!/bin/sh
+set -eu
 
 echo "*** [IA-32] Compiling C++ sources..."
 i686-w64-mingw32-g++ -Wall -Wextra -O3 -std=c++98 -c ./*.cpp
